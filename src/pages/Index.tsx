@@ -7,6 +7,10 @@ import { SpaceManagement } from "@/components/SpaceManagement";
 import { AssetTracking } from "@/components/AssetTracking";
 import { WorkOrders } from "@/components/WorkOrders";
 import { Reports } from "@/components/Reports";
+import { CleaningManagement } from "@/components/CleaningManagement";
+import { MaintenanceManagement } from "@/components/MaintenanceManagement";
+import { QuotationsInvoicing } from "@/components/QuotationsInvoicing";
+import { UserManagement } from "@/components/UserManagement";
 
 const Index = () => {
   const [activeSection, setActiveSection] = useState("dashboard");
@@ -21,6 +25,14 @@ const Index = () => {
         return <AssetTracking />;
       case "work-orders":
         return <WorkOrders />;
+      case "cleaning":
+        return <CleaningManagement />;
+      case "maintenance":
+        return <MaintenanceManagement />;
+      case "quotations":
+        return <QuotationsInvoicing />;
+      case "users":
+        return <UserManagement />;
       case "reports":
         return <Reports />;
       default:

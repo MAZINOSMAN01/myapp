@@ -1,5 +1,5 @@
 
-import { Building2, LayoutDashboard, Package2, Wrench, FileText, MapPin } from "lucide-react";
+import { Building2, LayoutDashboard, Package2, Wrench, FileText, MapPin, Sparkles, Settings, DollarSign, Users } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -38,6 +38,26 @@ const menuItems = [
     title: "Work Orders",
     icon: Wrench,
     id: "work-orders",
+  },
+  {
+    title: "Cleaning Management",
+    icon: Sparkles,
+    id: "cleaning",
+  },
+  {
+    title: "Maintenance Management",
+    icon: Settings,
+    id: "maintenance",
+  },
+  {
+    title: "Quotations & Invoicing",
+    icon: DollarSign,
+    id: "quotations",
+  },
+  {
+    title: "User Management",
+    icon: Users,
+    id: "users",
   },
   {
     title: "Reports",
