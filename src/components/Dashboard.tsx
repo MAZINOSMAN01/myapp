@@ -1,88 +1,198 @@
-// src/components/Dashboard.tsx
-
 import React, { useEffect, useState } from 'react';
-import { collection, query, where, getCountFromServer, getDocs } from "firebase/firestore"; // ** إضافة getDocs **
+import { collection, getDocs, getCountFromServer, query, where } from "firebase/firestore";
 import { db } from '../firebase/config.js';
-import { useNavigate } from 'react-router-dom';
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Users, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Users, ClipboardList, CheckCircle, AlertTriangle } from "lucide-react";
+import { Bar, BarChart, Pie, PieChart, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+
+// ... واجهات البيانات تبقى كما هي ...
+interface DashboardStats {
+  totalUsers: number;
+  workOrders: {
+    open: number;
+    completed: number;
+    overdue: number;
+  };
+  isLoading: boolean;
+}
+interface WorkOrderStatusData {
+  name: string;
+  value: number;
+}
+interface MaintenanceCostData {
+  name: string;
+  cost: number;
+}
+
+// **تعديل:** قاموس لترجمة واختصار أنواع الصيانة للمخطط الشريطي
+const maintenanceTypeTranslations: { [key: string]: string } = {
+  'Preventive Maintenance': 'Preventive',
+  'Corrective Maintenance (Repair)': 'Corrective',
+  'Predictive Maintenance (Inspection)': 'Predictive',
+  'Installation': 'Installation'
+};
+
+const PIE_CHART_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+const statusTranslations: { [key: string]: string } = { 
+  'In Progress': 'قيد التنفيذ', 
+  'Completed': 'مكتمل', 
+  'Pending': 'معلق', 
+  'Scheduled': 'مجدول' 
+};
+
+// **إضافة: تعريف إعدادات الألوان للمخططات**
+const pieChartConfig = {
+  value: {
+    label: "Work Orders",
+  },
+  'قيد التنفيذ': {
+    label: "قيد التنفيذ",
+    color: "hsl(var(--chart-1))",
+  },
+  'مكتمل': {
+    label: "مكتمل",
+    color: "hsl(var(--chart-2))",
+  },
+  'معلق': {
+    label: "معلق",
+    color: "hsl(var(--chart-3))",
+  },
+  'مجدول': {
+    label: "مجدول",
+    color: "hsl(var(--chart-4))",
+  },
+} satisfies ChartConfig;
+
+const barChartConfig = {
+  cost: {
+    label: "Cost ($)",
+    color: "hsl(var(--chart-1))",
+  },
+} satisfies ChartConfig;
+
 
 export function Dashboard() {
-  const navigate = useNavigate();
-  const [dashboardStats, setDashboardStats] = useState({
-    openOrders: 0,
-    completedOrders: 0,
-    inProgressOrders: 0,
-    overdueOrders: 0,
-    totalUsers: 0,
-    isLoading: true,
-  });
+  const [stats, setStats] = useState<DashboardStats>({
+    totalUsers: 0,
+    workOrders: { open: 0, completed: 0, overdue: 0 },
+    isLoading: true,
+  });
 
-  useEffect(() => {
-    const fetchOptimizedDashboardStats = async () => {
-      try {
+  const [workOrderStatusData, setWorkOrderStatusData] = useState<WorkOrderStatusData[]>([]);
+  const [maintenanceCostData, setMaintenanceCostData] = useState<MaintenanceCostData[]>([]);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const usersSnapshot = await getCountFromServer(collection(db, "users"));
         const workOrdersRef = collection(db, "work_orders");
-
-        // First, let's get the counts for simple queries
         const completedQuery = query(workOrdersRef, where("status", "==", "Completed"));
-        const usersQuery = collection(db, "users");
-
-        const [completedCount, totalUsersCount] = await Promise.all([
+        const openQuery = query(workOrdersRef, where("status", "in", ["Pending", "In Progress", "Scheduled"]));
+        
+        const [completedCount, openCount, allWorkOrdersSnapshot, maintenanceRecordsSnapshot] = await Promise.all([
           getCountFromServer(completedQuery),
-          getCountFromServer(usersQuery)
+          getCountFromServer(openQuery),
+          getDocs(workOrdersRef),
+          getDocs(collection(db, "maintenance_records")),
         ]);
         
-        // ** تعديل: جلب المستندات المفتوحة لمعالجتها في المتصفح **
-        const openQuery = query(workOrdersRef, where("status", "in", ["Pending", "In Progress", "Scheduled"]));
-        const openSnapshot = await getDocs(openQuery);
-
-        let inProgressCount = 0;
-        let overdueCount = 0;
-        const now_string = new Date().toISOString().slice(0, 10);
-
-        openSnapshot.docs.forEach(doc => {
-          const order = doc.data();
-          if (order.status === "In Progress") {
-            inProgressCount++;
-          }
-          if (order.dueDate && order.dueDate < now_string) {
-            overdueCount++;
-          }
-        });
-        
-        setDashboardStats({
-          openOrders: openSnapshot.size, // Total open orders is the size of the snapshot
-          completedOrders: completedCount.data().count,
-          inProgressOrders: inProgressCount,
-          overdueOrders: overdueCount,
-          totalUsers: totalUsersCount.data().count,
+        setStats({
+          totalUsers: usersSnapshot.data().count,
+          workOrders: {
+            completed: completedCount.data().count,
+            open: openCount.data().count,
+            overdue: 0,
+          },
           isLoading: false,
-        });
+        });
 
-      } catch (error) {
-        console.error("Error fetching optimized dashboard stats: ", error);
-        setDashboardStats(prev => ({ ...prev, isLoading: false }));
-      }
-    };
+        const statusCounts: { [key: string]: number } = {};
+        allWorkOrdersSnapshot.docs.forEach(doc => {
+          const status = doc.data().status || 'Pending';
+          statusCounts[status] = (statusCounts[status] || 0) + 1;
+        });
+        const pieData = Object.entries(statusCounts).map(([name, value]) => ({
+          name: statusTranslations[name] || name,
+          value,
+        }));
+        setWorkOrderStatusData(pieData);
 
-    fetchOptimizedDashboardStats();
-  }, []);
+        const costByType: { [key: string]: number } = {};
+        maintenanceRecordsSnapshot.docs.forEach(doc => {
+          const record = doc.data();
+          const type = record.maintenanceType || 'Uncategorized';
+          costByType[type] = (costByType[type] || 0) + (record.cost || 0);
+        });
+        // **تعديل:** استخدام القاموس لاختصار الأسماء
+        const barData = Object.entries(costByType).map(([name, cost]) => ({
+          name: maintenanceTypeTranslations[name] || name,
+          cost
+        }));
+        setMaintenanceCostData(barData);
 
-  // ... باقي المكون يبقى كما هو
-  if (dashboardStats.isLoading) {
-    return <p>Loading Dashboard...</p>;
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+        setStats(prev => ({ ...prev, isLoading: false }));
+      }
+    };
+    fetchDashboardData();
+  }, []);
+
+  if (stats.isLoading) {
+    return <p>Loading dashboard...</p>;
   }
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-      <p className="text-gray-500">Overview of facility operations</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="cursor-pointer hover:shadow-xl transition-shadow duration-200" onClick={() => navigate('/work-orders', { state: { filter: 'Open' } })}><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Open Orders</CardTitle><FileText className="h-4 w-4 text-gray-500" /></CardHeader><CardContent><div className="text-2xl font-bold">{dashboardStats.openOrders}</div><p className="text-xs text-gray-500">+{dashboardStats.inProgressOrders} In Progress</p></CardContent></Card>
-        <Card className="cursor-pointer hover:shadow-xl transition-shadow duration-200" onClick={() => navigate('/work-orders', { state: { filter: 'Completed' } })}><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Completed Orders</CardTitle><CheckCircle className="h-4 w-4 text-gray-500" /></CardHeader><CardContent><div className="text-2xl font-bold">{dashboardStats.completedOrders}</div><p className="text-xs text-gray-500">total completed</p></CardContent></Card>
-        <Card className="cursor-pointer hover:shadow-xl transition-shadow duration-200" onClick={() => navigate('/user-management')}><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Active Users</CardTitle><Users className="h-4 w-4 text-gray-500" /></CardHeader><CardContent><div className="text-2xl font-bold">{dashboardStats.totalUsers}</div><p className="text-xs text-gray-500">total users</p></CardContent></Card>
-        <Card className="cursor-pointer hover:shadow-xl transition-shadow duration-200" onClick={() => navigate('/work-orders', { state: { filter: 'Overdue' } })}><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Overdue Orders</CardTitle><AlertCircle className="h-4 w-4 text-red-500" /></CardHeader><CardContent><div className="text-2xl font-bold text-red-600">{dashboardStats.overdueOrders}</div><p className="text-xs text-gray-500">needs immediate attention</p></CardContent></Card>
-      </div>
-    </div>
-  );
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Users</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{stats.totalUsers}</div></CardContent></Card>
+        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Open Work Orders</CardTitle><ClipboardList className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{stats.workOrders.open}</div></CardContent></Card>
+        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Completed Work Orders</CardTitle><CheckCircle className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{stats.workOrders.completed}</div></CardContent></Card>
+        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Overdue Tasks</CardTitle><AlertTriangle className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{stats.workOrders.overdue}</div></CardContent></Card>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Work Orders by Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={pieChartConfig} className="mx-auto aspect-square h-[300px]">
+              <PieChart>
+                <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
+                {/* **تعديل:** إزالة label من هنا واستخدام Cell لتلوين كل قطعة ** */}
+                <Pie data={workOrderStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100}>
+                  {workOrderStatusData.map((_entry, index) => (
+                    <Cell key={`cell-${index}`} fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Legend />
+              </PieChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Maintenance Costs by Type</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={barChartConfig} className="aspect-auto h-[300px] w-full">
+              {/* **تعديل:** استخدام accessibilityLayer لمنع الخطأ مع BarChart */}
+              <BarChart data={maintenanceCostData} accessibilityLayer>
+                <CartesianGrid vertical={false} />
+                {/* **تعديل:** إزالة tickFormatter من هنا لأننا اختصرنا الأسماء في البيانات نفسها */}
+                <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
+                <YAxis />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Legend />
+                <Bar dataKey="cost" fill="var(--color-cost)" radius={4} />
+              </BarChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 }

@@ -1,5 +1,7 @@
+// src/components/FinancialReport.tsx
 import React, { useEffect, useState } from 'react';
-import { DocumentData } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from '../firebase/config.js';
 import Papa from 'papaparse';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,18 +10,15 @@ import { DollarSign, Wrench, Download } from 'lucide-react';
 interface CostDistribution { [key: string]: number; }
 interface FinancialMetrics { byMaintenanceType: CostDistribution; bySystemType: CostDistribution; }
 
-// ** تعديل: المكون الآن يستقبل البيانات كـ prop **
-export function FinancialReport({ data }: { data: DocumentData[] }) {
+export function FinancialReport() {
   const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // ** تم حذف منطق جلب البيانات من هنا **
-    const calculateFinancialMetrics = () => {
+    const calculateFinancialMetrics = async () => {
       try {
-        // ** الآن نستخدم البيانات المستقبلة مباشرة **
-        const records = data; 
-        
+        const querySnapshot = await getDocs(collection(db, "maintenance_records"));
+        const records = querySnapshot.docs.map(doc => doc.data());
         const byMaintenanceType = records.reduce((acc: CostDistribution, record) => {
           const type = record.maintenanceType || 'Uncategorized';
           acc[type] = (acc[type] || 0) + (record.cost || 0);
@@ -34,9 +33,8 @@ export function FinancialReport({ data }: { data: DocumentData[] }) {
       } catch (error) { console.error("Error calculating financial metrics:", error); }
       finally { setIsLoading(false); }
     };
-
     calculateFinancialMetrics();
-  }, [data]); // ** إضافة data إلى مصفوفة الاعتماديات **
+  }, []);
 
   const handleDownload = (data: CostDistribution, fileNamePrefix: string) => {
     if (!data || Object.keys(data).length === 0) {
