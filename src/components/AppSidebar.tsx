@@ -67,11 +67,14 @@ export function AppSidebar({ activeSection, setActiveSection }: AppSidebarProps)
 
   return (
     <Sidebar className="border-r border-gray-200 flex flex-col">
+      {/* --- هذا هو الجزء الذي تم تعديله --- */}
       <SidebarHeader className="p-4 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <Building2 className="h-8 w-8 text-blue-600" />
+        <div className="flex items-center gap-3">
+          {/* 1. تم وضع شعار شركتك هنا */}
+          <img src="/ALSALAMAH LOGO.jpg" alt="Company Logo" className="h-10 w-10 rounded-md object-contain" /> 
           <div>
-            <h1 className="text-xl font-bold text-gray-900">CAFM Pro</h1>
+            {/* 2. تم تغيير الاسم إلى اسم الشركة */}
+            <h1 className="text-lg font-bold text-gray-900">ALSALAMAH CO.</h1>
             <p className="text-sm text-gray-500">Facility Management</p>
           </div>
         </div>

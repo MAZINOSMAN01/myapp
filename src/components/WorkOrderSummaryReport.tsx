@@ -1,16 +1,18 @@
-// src/components/WorkOrderSummaryReport.tsx
-
-import React, { useEffect, useState } from 'react';
-import { collection, getDocs } from "firebase/firestore";
-import { db } from '../firebase/config.js';
+import React from 'react';
 import Papa from 'papaparse';
 import { Button } from "@/components/ui/button";
 import { Download } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { DocumentData } from 'firebase/firestore';
 
-// -- تم نقل دوال الألوان إلى خارج المكون، وهذا أفضل للممارسة --
+interface WorkOrder {
+  id: string;
+  [key: string]: any;
+}
+
+// ... دوال الألوان والترجمة تبقى كما هي ...
 const getStatusColor = (status: string) => {
   switch (status) {
     case "Completed": return "bg-green-100 text-green-800";
@@ -33,32 +35,12 @@ const getPriorityColor = (priority: string) => {
 const statusTranslations: { [key: string]: string } = { 'In Progress': 'قيد التنفيذ', 'Completed': 'مكتمل', 'Pending': 'معلق', 'Scheduled': 'مجدول' };
 const priorityTranslations: { [key: string]: string } = { 'High': 'عالية', 'Medium': 'متوسطة', 'Low': 'منخفضة' };
 
-interface WorkOrder {
-  id: string;
-  title: string;
-  status: string;
-  priority: string;
-  dueDate: string;
-  assignedTo: string;
-}
 
-export function WorkOrderSummaryReport() {
-  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  useEffect(() => {
-    const fetchWorkOrders = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "work_orders"));
-        const ordersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Omit<WorkOrder, 'id'>) }));
-        setWorkOrders(ordersData);
-      } catch (error) { console.error("Error fetching work orders for report:", error); } 
-      finally { setIsLoading(false); }
-    };
-    fetchWorkOrders();
-  }, []);
+export function WorkOrderSummaryReport({ data: workOrders }: { data: DocumentData[] }) {
+  // تم حذف useEffect لجلب البيانات
 
   const handleDownloadCSV = () => {
+    // ... دالة التحميل تبقى كما هي
     if (workOrders.length === 0) {
       alert("No data to download.");
       return;
@@ -67,7 +49,7 @@ export function WorkOrderSummaryReport() {
         columns: ['title', 'status', 'priority', 'assignedTo', 'dueDate'],
         header: true,
     });
-    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' }); // ** تعديل: إضافة BOM لـ Excel **
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' }); 
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
@@ -77,10 +59,6 @@ export function WorkOrderSummaryReport() {
     link.click();
     document.body.removeChild(link);
   };
-
-  if (isLoading) {
-    return <p>Loading work order summary...</p>;
-  }
 
   return (
     <Card>
