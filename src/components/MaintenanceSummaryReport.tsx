@@ -11,13 +11,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Download, Edit } from 'lucide-react';
 
+interface FirebaseTimestamp {
+  seconds: number;
+  nanoseconds: number;
+}
+
 interface MaintenanceRecord {
   id: string;
   assetName: string;
   maintenanceType: string;
   status: string;
   cost: number;
-  date: any;
+  date: FirebaseTimestamp | string;
   description?: string;
   invoiceNumber?: string;
 }
@@ -42,9 +47,10 @@ export function MaintenanceSummaryReport() {
 
   useEffect(() => { fetchRecords(); }, []);
 
-  const formatDate = (date: any) => {
-    if (!date?.seconds) return 'N/A';
-    return new Date(date.seconds * 1000).toLocaleDateString('en-CA');
+  const formatDate = (date: FirebaseTimestamp | string) => {
+    if (typeof date === 'string') return date;
+    if (!date || !(date as FirebaseTimestamp).seconds) return 'N/A';
+    return new Date((date as FirebaseTimestamp).seconds * 1000).toLocaleDateString('en-CA');
   };
 
   const handleDownloadCSV = () => {

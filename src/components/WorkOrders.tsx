@@ -1,24 +1,47 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc } from "firebase/firestore";
 import { useLocation } from 'react-router-dom';
 
 // Import db from central config file
 import { db } from '../firebase/config.js';
 
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button"; // **تم تصحيح هذا السطر: من `=>` إلى `from`**
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 import { Wrench, Search, Plus, Edit, Clock, User, AlertCircle, Trash2, XCircle, Settings } from "lucide-react";
 
+interface FirebaseTimestamp {
+  seconds: number;
+  nanoseconds: number;
+}
+
+interface WorkOrder {
+  id: string;
+  title: string;
+  description: string;
+  priority: string;
+  status: string;
+  dueDate: string | FirebaseTimestamp;
+  facility: string;
+  floor?: string;
+  type: string;
+  assignedTo: string;
+  created: string;
+}
+
+interface ListItem {
+  id: string;
+  name: string;
+}
+
 export function WorkOrders() {
-  const [workOrders, setWorkOrders] = useState([]);
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [editingOrder, setEditingOrder] = useState<WorkOrder | null>(null);
 
   // States for form input fields
   const [currentTitle, setCurrentTitle] = useState('');
@@ -32,9 +55,9 @@ export function WorkOrders() {
   const [currentAssignedTo, setCurrentAssignedTo] = useState('');
 
   // Dynamic dropdown lists
-  const [facilitiesList, setFacilitiesList] = useState<any[]>([]);
-  const [workOrderTypesList, setWorkOrderTypesList] = useState<any[]>([]);
-  const [usersList, setUsersList] = useState<any[]>([]);
+  const [facilitiesList, setFacilitiesList] = useState<ListItem[]>([]);
+  const [workOrderTypesList, setWorkOrderTypesList] = useState<ListItem[]>([]);
+  const [usersList, setUsersList] = useState<ListItem[]>([]);
 
   // States for managing lists in pop-up dialogs
   const [isManageFacilitiesOpen, setIsManageFacilitiesOpen] = useState(false);
@@ -42,12 +65,11 @@ export function WorkOrders() {
   const [isManageTypesOpen, setIsManageTypesOpen] = useState(false);
   const [newWorkOrderTypeName, setNewWorkOrderTypeName] = useState('');
 
-
   const location = useLocation();
   const [currentFilter, setCurrentFilter] = useState<string | null>(null);
 
   // Function to fetch work orders from Firebase
-  const fetchWorkOrders = async () => {
+  const fetchWorkOrders = useCallback(async () => {
     console.log("Attempting to fetch work orders from Firebase...");
     try {
       const querySnapshot = await getDocs(collection(db, "work_orders"));
@@ -55,16 +77,16 @@ export function WorkOrders() {
       const orders = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      } as WorkOrder));
       console.log("Fetched orders:", orders);
       setWorkOrders(orders);
     } catch (error) {
       console.error("Error fetching work orders: ", error);
     }
-  };
+  }, []);
 
   // Functions to fetch dynamic lists
-  const fetchFacilities = async () => {
+  const fetchFacilities = useCallback(async () => {
     console.log("Attempting to fetch facilities list...");
     try {
       const snapshot = await getDocs(collection(db, "facilities"));
@@ -76,9 +98,9 @@ export function WorkOrders() {
         setCurrentFacility('');
       }
     } catch (error) { console.error("Error fetching facilities:", error); }
-  };
+  }, [currentFacility]);
 
-  const fetchWorkOrderTypes = async () => {
+  const fetchWorkOrderTypes = useCallback(async () => {
     console.log("Attempting to fetch work order types list...");
     try {
       const snapshot = await getDocs(collection(db, "work_order_types"));
@@ -90,9 +112,9 @@ export function WorkOrders() {
         setCurrentType('');
       }
     } catch (error) { console.error("Error fetching work order types:", error); }
-  };
+  }, [currentType]);
 
-  const fetchUsersList = async () => {
+  const fetchUsersList = useCallback(async () => {
     console.log("Attempting to fetch users list for assignedTo...");
     try {
       const snapshot = await getDocs(collection(db, "users"));
@@ -104,15 +126,14 @@ export function WorkOrders() {
         setCurrentAssignedTo('');
       }
     } catch (error) { console.error("Error fetching users list:", error); }
-  };
-
+  }, [currentAssignedTo]);
 
   useEffect(() => {
     fetchWorkOrders();
     fetchFacilities();
     fetchWorkOrderTypes();
     fetchUsersList();
-  }, []);
+  }, [fetchWorkOrders, fetchFacilities, fetchWorkOrderTypes, fetchUsersList]);
 
   useEffect(() => {
     if (location.state && location.state.filter) {
@@ -123,14 +144,30 @@ export function WorkOrders() {
     }
   }, [location.state]);
 
-  const openOrderForm = (orderToEdit: any = null) => {
+  const formatDateForInput = (date: string | FirebaseTimestamp): string => {
+    if (typeof date === 'string') return date;
+    if (date && (date as FirebaseTimestamp).seconds) {
+      return new Date((date as FirebaseTimestamp).seconds * 1000).toISOString().slice(0, 10);
+    }
+    return '';
+  };
+
+  const formatDateForDisplay = (date: string | FirebaseTimestamp): string => {
+    if (typeof date === 'string') return date;
+    if (date && (date as FirebaseTimestamp).seconds) {
+      return new Date((date as FirebaseTimestamp).seconds * 1000).toLocaleDateString();
+    }
+    return '';
+  };
+
+  const openOrderForm = (orderToEdit: WorkOrder | null = null) => {
     if (orderToEdit) {
       setEditingOrder(orderToEdit);
       setCurrentTitle(orderToEdit.title || '');
       setCurrentDescription(orderToEdit.description || '');
       setCurrentPriority(orderToEdit.priority || 'Medium');
       setCurrentStatus(orderToEdit.status || 'Pending');
-      setCurrentDueDate(orderToEdit.dueDate || '');
+      setCurrentDueDate(formatDateForInput(orderToEdit.dueDate) || '');
       setCurrentFacility(orderToEdit.facility || (facilitiesList.length > 0 ? facilitiesList[0].name : ''));
       setCurrentFloor(orderToEdit.floor || '');
       setCurrentType(orderToEdit.type || (workOrderTypesList.length > 0 ? workOrderTypesList[0].name : ''));
@@ -255,19 +292,20 @@ export function WorkOrders() {
         return order.status === 'In Progress';
       case 'Scheduled':
         return order.status === 'Scheduled';
-      case 'Overdue':
+      case 'Overdue': {
         const now = Date.now();
         let dueDateTimestamp;
         if (order.dueDate) {
           if (typeof order.dueDate === 'string') {
             dueDateTimestamp = new Date(order.dueDate).getTime();
-          } else if (order.dueDate.seconds) {
-            dueDateTimestamp = order.dueDate.seconds * 1000;
+          } else if ((order.dueDate as FirebaseTimestamp).seconds) {
+            dueDateTimestamp = (order.dueDate as FirebaseTimestamp).seconds * 1000;
           } else {
             dueDateTimestamp = order.dueDate;
           }
         }
         return order.status !== 'Completed' && dueDateTimestamp < now;
+      }
       case 'Users':
         return false;
       case 'ActiveTasks':
@@ -330,7 +368,6 @@ export function WorkOrders() {
       if (currentType === name) setCurrentType(workOrderTypesList.length > 1 ? workOrderTypesList[0].name : '');
     } catch (e) { console.error("Error deleting work order type:", e); alert("An error occurred."); }
   };
-
 
   return (
     <div className="space-y-6">
@@ -484,7 +521,6 @@ export function WorkOrders() {
         </Card>
       </div>
 
-
       {/* Work Order Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {filteredWorkOrders.length > 0 ? (
@@ -532,7 +568,7 @@ export function WorkOrders() {
                       </span>
                       <span className="flex items-center gap-1">
                         <AlertCircle className="h-3 w-4 text-orange-500" />
-                        Due: {order.dueDate}
+                        Due: {formatDateForDisplay(order.dueDate)}
                       </span>
                     </div>
                   </div>
@@ -586,7 +622,13 @@ export function WorkOrders() {
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-red-600">
-                {workOrders.filter(order => order.status !== 'Completed' && new Date(order.dueDate).getTime() < Date.now()).length}
+                {workOrders.filter(order => {
+                  if (order.status === 'Completed') return false;
+                  const dueDateMs = typeof order.dueDate === 'string' 
+                    ? new Date(order.dueDate).getTime()
+                    : (order.dueDate as FirebaseTimestamp).seconds * 1000;
+                  return dueDateMs < Date.now();
+                }).length}
               </div>
               <p className="text-sm text-gray-500">Overdue</p>
             </div>

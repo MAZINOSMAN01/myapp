@@ -11,6 +11,16 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserPlus, Edit, Trash2 } from "lucide-react";
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  description?: string;
+  permissions?: string[];
+}
+
 const getRoleColor = (role: string) => { 
   switch (role) { 
     case "High Manager": return "bg-blue-100 text-blue-800"; 
@@ -29,117 +39,117 @@ const getStatusColor = (status: string) => {
 };
 
 export function UserManagement() {
-  const [users, setUsers] = useState<any[]>([]);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<any>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
-  const [currentName, setCurrentName] = useState('');
-  const [currentEmail, setCurrentEmail] = useState('');
-  const [currentRole, setCurrentRole] = useState('Engineer');
-  const [currentStatus, setCurrentStatus] = useState('Active');
-  const [currentDescription, setCurrentDescription] = useState('');
-  const [currentPermissions, setCurrentPermissions] = useState<string[]>([]);
+  const [currentName, setCurrentName] = useState('');
+  const [currentEmail, setCurrentEmail] = useState('');
+  const [currentRole, setCurrentRole] = useState('Engineer');
+  const [currentStatus, setCurrentStatus] = useState('Active');
+  const [currentDescription, setCurrentDescription] = useState('');
+  const [currentPermissions, setCurrentPermissions] = useState<string[]>([]);
 
-  const fetchUsers = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, "users"));
-      const fetchedUsers = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setUsers(fetchedUsers);
-    } catch (error) { console.error("Error fetching users: ", error); }
-  };
+  const fetchUsers = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "users"));
+      const fetchedUsers = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+      setUsers(fetchedUsers);
+    } catch (error) { console.error("Error fetching users: ", error); }
+  };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
-  const openUserForm = (userToEdit: any = null) => {
-    if (userToEdit) {
-      setEditingUser(userToEdit);
-      setCurrentName(userToEdit.name || '');
-      setCurrentEmail(userToEdit.email || '');
-      setCurrentRole(userToEdit.role || 'Engineer');
-      setCurrentStatus(userToEdit.status || 'Active');
-      setCurrentDescription(userToEdit.description || '');
-      setCurrentPermissions(userToEdit.permissions || []);
-    } else {
-      setEditingUser(null);
-      setCurrentName('');
-      setCurrentEmail('');
-      setCurrentRole('Engineer');
-      setCurrentStatus('Active');
-      setCurrentDescription('');
-      setCurrentPermissions([]);
-    }
-    setIsFormOpen(true);
-  };
+  const openUserForm = (userToEdit: User | null = null) => {
+    if (userToEdit) {
+      setEditingUser(userToEdit);
+      setCurrentName(userToEdit.name || '');
+      setCurrentEmail(userToEdit.email || '');
+      setCurrentRole(userToEdit.role || 'Engineer');
+      setCurrentStatus(userToEdit.status || 'Active');
+      setCurrentDescription(userToEdit.description || '');
+      setCurrentPermissions(userToEdit.permissions || []);
+    } else {
+      setEditingUser(null);
+      setCurrentName('');
+      setCurrentEmail('');
+      setCurrentRole('Engineer');
+      setCurrentStatus('Active');
+      setCurrentDescription('');
+      setCurrentPermissions([]);
+    }
+    setIsFormOpen(true);
+  };
 
-  const closeUserForm = () => setIsFormOpen(false);
+  const closeUserForm = () => setIsFormOpen(false);
 
-  const handleSaveUser = async () => {
-    if (!currentName || !currentEmail || !currentRole) {
-      alert("Please enter Name, Email, and Role.");
-      return;
-    }
-    const userData = { name: currentName, email: currentEmail, role: currentRole, status: currentStatus, description: currentDescription, permissions: currentPermissions };
-    try {
-      if (editingUser) { await updateDoc(doc(db, "users", editingUser.id), userData); } 
+  const handleSaveUser = async () => {
+    if (!currentName || !currentEmail || !currentRole) {
+      alert("Please enter Name, Email, and Role.");
+      return;
+    }
+    const userData = { name: currentName, email: currentEmail, role: currentRole, status: currentStatus, description: currentDescription, permissions: currentPermissions };
+    try {
+      if (editingUser) { await updateDoc(doc(db, "users", editingUser.id), userData); } 
       else { await addDoc(collection(db, "users"), userData); }
-      closeUserForm();
-      fetchUsers();
-    } catch (e) { console.error("Error saving user: ", e); alert("An error occurred while saving the user."); }
-  };
+      closeUserForm();
+      fetchUsers();
+    } catch (e) { console.error("Error saving user: ", e); alert("An error occurred while saving the user."); }
+  };
 
-  const handleDeleteUser = async (userId: string, userName: string) => {
-    if (!window.confirm(`Are you sure you want to delete user: "${userName}"?`)) return;
-    try {
-      await deleteDoc(doc(db, "users", userId));
-      fetchUsers();
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`Are you sure you want to delete user: "${userName}"?`)) return;
+    try {
+      await deleteDoc(doc(db, "users", userId));
+      fetchUsers();
       if(editingUser && editingUser.id === userId) { closeUserForm(); }
-    } catch (e) { console.error("Error deleting user: ", e); alert("An error occurred while deleting the user."); }
-  };
+    } catch (e) { console.error("Error deleting user: ", e); alert("An error occurred while deleting the user."); }
+  };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-          <p className="text-gray-500">Manage users, roles, and permissions</p>
-        </div>
-        <Button onClick={() => openUserForm()} className="bg-blue-600 hover:bg-blue-700">
-          <UserPlus className="h-4 w-4 mr-2" />
-          Add New User
-        </Button>
-      </div>
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
+          <p className="text-gray-500">Manage users, roles, and permissions</p>
+        </div>
+        <Button onClick={() => openUserForm()} className="bg-blue-600 hover:bg-blue-700">
+          <UserPlus className="h-4 w-4 mr-2" />
+          Add New User
+        </Button>
+      </div>
 
-      {isFormOpen && (
-        <Card className="p-6 mt-6"><CardTitle className="mb-4 text-xl">{editingUser ? "Edit User" : "Add New User"}</CardTitle>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <Input placeholder="Full Name" value={currentName} onChange={(e) => setCurrentName(e.target.value)} className="col-span-full" />
-            <Input type="email" placeholder="Email" value={currentEmail} onChange={(e) => setCurrentEmail(e.target.value)} className="col-span-full" />
-            <Select value={currentRole} onValueChange={setCurrentRole}><SelectTrigger><SelectValue placeholder="Role" /></SelectTrigger><SelectContent><SelectItem value="High Manager">High Manager</SelectItem><SelectItem value="Engineer">Engineer</SelectItem><SelectItem value="Technician">Technician</SelectItem></SelectContent></Select>
-            <Select value={currentStatus} onValueChange={setCurrentStatus}><SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="Active">Active</SelectItem><SelectItem value="Inactive">Inactive</SelectItem></SelectContent></Select>
-            <Input placeholder="Description / Notes (optional)" value={currentDescription} onChange={(e) => setCurrentDescription(e.target.value)} className="col-span-full" />
-          </div>
-          <div className="flex justify-end gap-2"><Button variant="outline" onClick={closeUserForm}>Cancel</Button><Button onClick={handleSaveUser} className="bg-blue-600 hover:bg-blue-700">{editingUser ? "Save Changes" : "Add User"}</Button></div>
-        </Card>
-      )}
+      {isFormOpen && (
+        <Card className="p-6 mt-6"><CardTitle className="mb-4 text-xl">{editingUser ? "Edit User" : "Add New User"}</CardTitle>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <Input placeholder="Full Name" value={currentName} onChange={(e) => setCurrentName(e.target.value)} className="col-span-full" />
+            <Input type="email" placeholder="Email" value={currentEmail} onChange={(e) => setCurrentEmail(e.target.value)} className="col-span-full" />
+            <Select value={currentRole} onValueChange={setCurrentRole}><SelectTrigger><SelectValue placeholder="Role" /></SelectTrigger><SelectContent><SelectItem value="High Manager">High Manager</SelectItem><SelectItem value="Engineer">Engineer</SelectItem><SelectItem value="Technician">Technician</SelectItem></SelectContent></Select>
+            <Select value={currentStatus} onValueChange={setCurrentStatus}><SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="Active">Active</SelectItem><SelectItem value="Inactive">Inactive</SelectItem></SelectContent></Select>
+            <Input placeholder="Description / Notes (optional)" value={currentDescription} onChange={(e) => setCurrentDescription(e.target.value)} className="col-span-full" />
+          </div>
+          <div className="flex justify-end gap-2"><Button variant="outline" onClick={closeUserForm}>Cancel</Button><Button onClick={handleSaveUser} className="bg-blue-600 hover:bg-blue-700">{editingUser ? "Save Changes" : "Add User"}</Button></div>
+        </Card>
+      )}
 
       {/* --- Unified Grid System (12 columns) --- */}
       <div className="grid grid-cols-12 gap-6">
 
         {/* Search Bar (Spans 9 columns on large screens) */}
         <div className="col-span-12 lg:col-span-9">
-            <Input placeholder="Search for a user..." />
+          <Input placeholder="Search for a user..." />
         </div>
 
         {/* Total Users Card (Spans 3 columns on large screens) */}
         <div className="col-span-12 lg:col-span-3">
-            <Card className="h-full">
-              <CardContent className="flex items-center justify-center pt-6 text-center">
-                <div>
-                  <div className="text-2xl font-bold text-blue-600">{users.length}</div>
-                  <p className="text-sm text-gray-500">Total Users</p>
-                </div>
-              </CardContent>
-            </Card>
+          <Card className="h-full">
+            <CardContent className="flex items-center justify-center pt-6 text-center">
+              <div>
+                <div className="text-2xl font-bold text-blue-600">{users.length}</div>
+                <p className="text-sm text-gray-500">Total Users</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
         
         {/* User Cards (Each card spans 4 columns, so 3 cards per row) */}
@@ -179,6 +189,6 @@ export function UserManagement() {
           </div>
         )}
       </div>
-    </div>
-  );
+    </div>
+  );
 }

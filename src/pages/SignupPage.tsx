@@ -10,6 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 
+interface FirebaseError extends Error {
+  code: string;
+}
+
 export function SignupPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -34,16 +38,17 @@ export function SignupPage() {
       });
       
       navigate('/');
-    } catch (err: any) {
+    } catch (err: unknown) {
       // ** هذا هو التعديل المهم **
       // الآن سنعرض رسائل خطأ دقيقة بناءً على نوع الخطأ من Firebase
-      console.error("Firebase signup error:", err.code, err.message); // لطباعة الخطأ الكامل في الـ console
+      const firebaseErr = err as FirebaseError;
+      console.error("Firebase signup error:", firebaseErr.code, firebaseErr.message); // لطباعة الخطأ الكامل في الـ console
       
-      if (err.code === 'auth/weak-password') {
+      if (firebaseErr.code === 'auth/weak-password') {
         setError('Password is too weak. It must be at least 6 characters long.');
-      } else if (err.code === 'auth/invalid-email') {
+      } else if (firebaseErr.code === 'auth/invalid-email') {
         setError('The email address is not valid.');
-      } else if (err.code === 'auth/email-already-in-use') {
+      } else if (firebaseErr.code === 'auth/email-already-in-use') {
         setError('This email is already registered. Please log in.');
       } else {
         // لأي خطأ آخر، اعرض الرسالة العامة

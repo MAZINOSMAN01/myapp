@@ -1826,7 +1826,7 @@ export function MaintenanceManagement() {
 
                   <div className="space-y-4">
 
-                    {allUniqueMaterials.map((material: any) => (
+                                        {allUniqueMaterials.map((material: { name: string; systems: string; records: string[] }) => (
 
                       <div key={material.name} className="p-3 border rounded-md bg-gray-50">
 
@@ -1894,7 +1894,7 @@ export function MaintenanceManagement() {
 
                   <div className="space-y-2">
 
-                    {upcomingTasksCategorized.weekly.map((task: any) => (
+                                        {upcomingTasksCategorized.weekly.map((task: { id: string; assetName: string; systemType: string; maintenanceType: string; displayNextDueDate: string }) => (
 
                       <div key={task.id} className="flex items-center justify-between p-2 bg-gray-100 rounded">
 
@@ -1920,7 +1920,7 @@ export function MaintenanceManagement() {
 
                   <div className="space-y-2">
 
-                    {upcomingTasksCategorized.monthly.map((task: any) => (
+                                        {upcomingTasksCategorized.monthly.map((task: { id: string; assetName: string; systemType: string; maintenanceType: string; displayNextDueDate: string }) => (
 
                       <div key={task.id} className="flex items-center justify-between p-2 bg-gray-100 rounded">
 
@@ -1946,7 +1946,7 @@ export function MaintenanceManagement() {
 
                   <div className="space-y-2">
 
-                    {upcomingTasksCategorized.annual.map((task: any) => (
+                                        {upcomingTasksCategorized.annual.map((task: { id: string; assetName: string; systemType: string; maintenanceType: string; displayNextDueDate: string }) => (
 
                       <div key={task.id} className="flex items-center justify-between p-2 bg-gray-100 rounded">
 
@@ -1972,7 +1972,7 @@ export function MaintenanceManagement() {
 
                   <div className="space-y-2">
 
-                    {upcomingTasksCategorized.future.map((task: any) => (
+                                        {upcomingTasksCategorized.future.map((task: { id: string; assetName: string; systemType: string; maintenanceType: string; displayNextDueDate: string }) => (
 
                       <div key={task.id} className="flex items-center justify-between p-2 bg-gray-100 rounded">
 

@@ -23,7 +23,7 @@ export function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       navigate('/'); 
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Failed to log in. Please check your email and password.');
       console.error(err);
     }
