@@ -18,15 +18,15 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { Dashboard } from './components/Dashboard';
 import { WorkOrders } from './components/WorkOrders';
 import { UserManagement } from './components/UserManagement';
-import { MaintenanceManagement } from './components/MaintenanceManagement';
 import { Reports } from './components/Reports';
 
-// Newly Added Components
+// Newly Added & Modified Components
+import { MaintenancePage } from './components/MaintenancePage';
+import { AssetManagement } from './components/AssetManagement'; // **إضافة: استيراد مكون إدارة الأصول**
 import { MOTsManagement } from './components/MOTsManagement';
 import { IssueLog } from './components/IssueLog';
 import { LessonsLearned } from './components/LessonsLearned';
 import { SpaceManagement } from './components/SpaceManagement'; 
-import { AssetTracking } from './components/AssetTracking';
 import { CleaningManagement } from './components/CleaningManagement';
 import { QuotationsInvoicing } from './components/QuotationsInvoicing';
 
@@ -56,10 +56,13 @@ function AppRoutes() {
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="space-management" element={<SpaceManagement />} />
-          <Route path="asset-tracking" element={<AssetTracking />} />
+
+          {/* --- هنا تم التعديل --- */}
+          <Route path="asset-tracking" element={<AssetManagement />} /> 
+
           <Route path="work-orders" element={<WorkOrders />} />
           <Route path="cleaning-management" element={<CleaningManagement />} />
-          <Route path="maintenance-management" element={<MaintenanceManagement />} />
+          <Route path="maintenance-management" element={<MaintenancePage />} /> 
           <Route path="quotations-invoicing" element={<QuotationsInvoicing />} />
           <Route path="issue-log" element={<IssueLog />} />
           <Route path="lessons-learned" element={<LessonsLearned />} />

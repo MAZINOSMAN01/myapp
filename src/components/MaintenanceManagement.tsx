@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '@/firebase/config';
-import { collection, onSnapshot, addDoc, doc, updateDoc, getDocs, writeBatch, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, doc, updateDoc, getDocs, writeBatch, Timestamp, query, where } from 'firebase/firestore';
 import { DataTable } from './DataTable';
 import { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
@@ -231,14 +231,14 @@ export function MaintenanceManagement() {
                     <SlidersHorizontal className="inline-block mr-2 h-5 w-5" />
                     Filters
                 </h3>
-                <Select value={filters.assetId} onValueChange={(value) => setFilters(f => ({ ...f, assetId: value === "all" ? "" : value }))}>
+                <Select value={filters.assetId || "all"} onValueChange={(value) => setFilters(f => ({ ...f, assetId: value === "all" ? "" : value }))}>
                     <SelectTrigger className="w-[180px]"><SelectValue placeholder="All Assets" /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Assets</SelectItem>
                         {assets.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                     </SelectContent>
                 </Select>
-                <Select value={filters.type} onValueChange={(value) => setFilters(f => ({ ...f, type: value === "all" ? "" : value }))}>
+                <Select value={filters.type || "all"} onValueChange={(value) => setFilters(f => ({ ...f, type: value === "all" ? "" : value }))}>
                     <SelectTrigger className="w-[180px]"><SelectValue placeholder="All Types" /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Types</SelectItem>
@@ -246,7 +246,7 @@ export function MaintenanceManagement() {
                         <SelectItem value="Corrective">Corrective</SelectItem>
                     </SelectContent>
                 </Select>
-                <Select value={filters.status} onValueChange={(value) => setFilters(f => ({ ...f, status: value === "all" ? "" : value }))}>
+                <Select value={filters.status || "all"} onValueChange={(value) => setFilters(f => ({ ...f, status: value === "all" ? "" : value }))}>
                     <SelectTrigger className="w-[180px]"><SelectValue placeholder="All Statuses" /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Statuses</SelectItem>
@@ -279,7 +279,7 @@ export function MaintenanceManagement() {
                            <Input placeholder="e.g., Main water line is leaking" onChange={(e) => setCorrectiveFormData(d => ({...d, taskDescription: e.target.value}))}/>
                         </div>
                          <div className="space-y-2">
-                           <Label>Due Date</Label>
+                           <Label>Date</Label>
                            <Input type="date" onChange={(e) => setCorrectiveFormData(d => ({...d, dueDate: Timestamp.fromDate(new Date(e.target.value))}))}/>
                         </div>
                     </div>

@@ -1,8 +1,7 @@
 // src/components/AppSidebar.tsx
-
 import { 
   Building2, LayoutDashboard, Package2, Wrench, FileText, 
-  MapPin, Sparkles, Settings, DollarSign, Users, LogOut, Ticket, ClipboardList, Lightbulb 
+  MapPin, Sparkles, Settings, DollarSign, Users, LogOut, Ticket, ClipboardList, Lightbulb, Car
 } from "lucide-react";
 import { 
   Sidebar, SidebarContent, SidebarHeader, SidebarMenu, 
@@ -13,23 +12,55 @@ import { getAuth, signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 
 interface AppSidebarProps {
-  activeSection: string;
-  setActiveSection: (section: string) => void;
+  activeSection: string;
+  setActiveSection: (section: string) => void;
 }
 
-const menuItems = [
-  { title: "Dashboard", icon: LayoutDashboard, id: "dashboard" },
-  { title: "Space Management", icon: MapPin, id: "spaces" },
-  { title: "Asset Tracking", icon: Package2, id: "assets" },
-  { title: "Work Orders", icon: Wrench, id: "work-orders" },
-  { title: "Cleaning Management", icon: Sparkles, id: "cleaning" },
-  { title: "Maintenance Management", icon: Settings, id: "maintenance" },
-  { title: "Quotations & Invoicing", icon: DollarSign, id: "quotations" },
-  { title: "Issue Log", icon: ClipboardList, id: "issue-log" },
-  { title: "Lessons Learned", icon: Lightbulb, id: "lessons-learned" },
-  { title: "MOTs", icon: Ticket, id: "mots" },
-  { title: "User Management", icon: Users, id: "users" },
-  { title: "Reports", icon: FileText, id: "reports" },
+// --- Menu items are now grouped ---
+const menuGroups = [
+    {
+        title: "Main",
+        items: [
+            { title: "Dashboard", icon: LayoutDashboard, id: "dashboard" },
+        ]
+    },
+    {
+        title: "Operations",
+        items: [
+            { title: "Work Orders", icon: Wrench, id: "work-orders" },
+            { title: "Maintenance", icon: Settings, id: "maintenance" },
+            { title: "Cleaning Management", icon: Sparkles, id: "cleaning" },
+        ]
+    },
+    {
+        title: "Assets & Spaces",
+        items: [
+            // --- THIS IS THE MODIFIED LINE ---
+            { title: "Asset Management", icon: Package2, id: "assets" },
+            { title: "Space Management", icon: MapPin, id: "spaces" },
+        ]
+    },
+    {
+        title: "Quality & Safety",
+        items: [
+            { title: "MOTs", icon: Car, id: "mots" },
+            { title: "Issue Log", icon: ClipboardList, id: "issue-log" },
+            { title: "Lessons Learned", icon: Lightbulb, id: "lessons-learned" },
+        ]
+    },
+    {
+        title: "Finance",
+        items: [
+            { title: "Quotations & Invoicing", icon: DollarSign, id: "quotations" },
+        ]
+    },
+    {
+        title: "Administration",
+        items: [
+            { title: "User Management", icon: Users, id: "users" },
+            { title: "Reports", icon: FileText, id: "reports" },
+        ]
+    }
 ];
 
 const rolePermissions: { [key: string]: string[] } = {
@@ -61,46 +92,52 @@ export function AppSidebar({ activeSection, setActiveSection }: AppSidebarProps)
   
   const userRole = userProfile?.role || 'Technician'; 
   const allowedSections = rolePermissions[userRole] || [];
-  const filteredMenuItems = menuItems.filter(item => 
-    allowedSections.includes(item.id)
-  );
-
-  return (
-    <Sidebar className="border-r border-gray-200 flex flex-col">
-      {/* --- هذا هو الجزء الذي تم تعديله --- */}
-      <SidebarHeader className="p-4 border-b border-gray-200">
-        <div className="flex items-center gap-3">
-          {/* 1. تم وضع شعار شركتك هنا */}
+  
+  return (
+    <Sidebar className="border-r border-gray-200 flex flex-col">
+      <SidebarHeader className="p-4 border-b border-gray-200">
+        <div className="flex items-center gap-3">
           <img src="/ALSALAMAH LOGO.jpg" alt="Company Logo" className="h-10 w-10 rounded-md object-contain" /> 
           <div>
-            {/* 2. تم تغيير الاسم إلى اسم الشركة */}
             <h1 className="text-lg font-bold text-gray-900">ALSALAMAH CO.</h1>
             <p className="text-sm text-gray-500">Facility Management</p>
           </div>
         </div>
-      </SidebarHeader>
+      </SidebarHeader>
 
-      <SidebarContent className="flex-1 overflow-y-auto">
+      <SidebarContent className="flex-1 overflow-y-auto">
         <div className="py-4 space-y-4">
-            <h2 className="px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">
-              NAVIGATION
-            </h2>
-            <SidebarMenu>
-              {filteredMenuItems.map((item) => (
-                <SidebarMenuItem key={item.id}>
-                  <SidebarMenuButton
-                    onClick={() => setActiveSection(item.id)}
-                    isActive={activeSection === item.id}
-                    className="w-full"
-                  >
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
+            {menuGroups.map((group) => {
+                const filteredItems = group.items.filter(item => allowedSections.includes(item.id));
+                
+                if (filteredItems.length === 0) {
+                    return null;
+                }
+                
+                return (
+                    <div key={group.title}>
+                        <h2 className="px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {group.title}
+                        </h2>
+                        <SidebarMenu className="mt-2">
+                            {filteredItems.map((item) => (
+                                <SidebarMenuItem key={item.id}>
+                                    <SidebarMenuButton
+                                        onClick={() => setActiveSection(item.id)}
+                                        isActive={activeSection === item.id}
+                                        className="w-full"
+                                    >
+                                        <item.icon className="h-4 w-4" />
+                                        <span>{item.title}</span>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            ))}
+                        </SidebarMenu>
+                    </div>
+                );
+            })}
         </div>
-      </SidebarContent>
+      </SidebarContent>
 
       <div className="p-4 border-t border-gray-200">
         <SidebarMenu>
@@ -112,6 +149,6 @@ export function AppSidebar({ activeSection, setActiveSection }: AppSidebarProps)
           </SidebarMenuItem>
         </SidebarMenu>
       </div>
-    </Sidebar>
-  );
+    </Sidebar>
+  );
 }

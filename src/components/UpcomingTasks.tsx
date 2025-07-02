@@ -1,138 +1,81 @@
-import React, { useState, useMemo } from 'react';
-import { MaintenanceTask } from './MaintenanceManagement';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarDays, Filter } from "lucide-react";
+// src/components/UpcomingTasks.tsx
 
-interface UpcomingTasksProps {
-  tasks: MaintenanceTask[];
-  systems: { id: string, name: string }[];
-  maintenanceTypes: { id: string, name: string }[];
+import React, { useState, useMemo } from 'react';
+import { Timestamp } from 'firebase/firestore';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CalendarDays } from "lucide-react";
+
+// Define the interface locally to avoid circular dependencies
+interface Task {
+    id: string;
+    assetName?: string;
+    taskDescription: string;
+    status: string;
+    dueDate: Timestamp;
+    frequency?: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually';
 }
 
-// دالة حساب التواريخ المستقبلية
-const generateUpcomingOccurrences = (tasks: MaintenanceTask[]): MaintenanceTask[] => {
-  const upcomingTasks: MaintenanceTask[] = [];
-  const now = new Date();
-  
-  tasks.forEach(task => {
-    if (task.frequency === 'One-Off' || !task.nextDueDate) {
-      return;
-    }
-    
-    let nextDate = new Date(task.nextDueDate);
-    const oneYearFromNow = new Date();
-    oneYearFromNow.setFullYear(now.getFullYear() + 1);
+interface UpcomingTasksProps {
+  allTasks: Task[];
+}
 
-    while (nextDate <= oneYearFromNow) {
-      if (nextDate > now) {
-        upcomingTasks.push({
-          ...task,
-          id: `${task.id}-${nextDate.toISOString()}`, 
-          displayDueDate: nextDate.toISOString().split('T')[0],
-        });
-      }
-      
-      switch (task.frequency) {
-        case 'Weekly': nextDate.setDate(nextDate.getDate() + 7); break;
-        case 'Monthly': nextDate.setMonth(nextDate.getMonth() + 1); break;
-        case 'Quarterly': nextDate.setMonth(nextDate.getMonth() + 3); break;
-        case 'Semi-Annual': nextDate.setMonth(nextDate.getMonth() + 6); break;
-        case 'Annual': nextDate.setFullYear(nextDate.getFullYear() + 1); break;
-        default: return;
-      }
-    }
-  });
-
-  return upcomingTasks.sort((a, b) => 
-    new Date(a.displayDueDate!).getTime() - new Date(b.displayDueDate!).getTime()
-  );
-};
-
-
-export function UpcomingTasks({ tasks, systems, maintenanceTypes }: UpcomingTasksProps) {
-  const [systemFilter, setSystemFilter] = useState('all');
-  const [frequencyFilter, setFrequencyFilter] = useState('all');
+export function UpcomingTasks({ allTasks }: UpcomingTasksProps) {
+  const [filter, setFilter] = useState('next7days');
 
   const filteredTasks = useMemo(() => {
-    // لا تقم بالفلترة إذا لم يتم تحديد النظام
-    if (systemFilter === 'all') return [];
+    const now = new Date();
+    const upcoming = allTasks
+      .filter(task => task.status === 'Pending' && task.dueDate.toDate() >= now)
+      .sort((a, b) => a.dueDate.seconds - b.dueDate.seconds);
 
-    return tasks.filter(task => {
-      const systemMatch = task.systemId === systemFilter;
-      const frequencyMatch = frequencyFilter === 'all' || task.frequency === frequencyFilter;
-      return systemMatch && frequencyMatch;
-    });
-  }, [tasks, systemFilter, frequencyFilter]);
+    if (filter === 'weekly') {
+      return upcoming.filter(task => task.frequency === 'Weekly');
+    }
+    
+    const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    return upcoming.filter(task => task.dueDate.toDate() <= next7Days);
 
-  const allUpcoming = generateUpcomingOccurrences(filteredTasks);
-  
-  const now = new Date();
-  const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
-
-  const tasksNextWeek = allUpcoming.filter(t => new Date(t.displayDueDate!) <= nextWeek);
-  const tasksNextMonth = allUpcoming.filter(t => new Date(t.displayDueDate!) > nextWeek && new Date(t.displayDueDate!) <= nextMonth);
-  const tasksFuture = allUpcoming.filter(t => new Date(t.displayDueDate!) > nextMonth);
-
-  const renderTaskList = (taskList: MaintenanceTask[], title: string) => (
-    <div>
-      <h3 className="text-lg font-semibold mb-2">{title} ({taskList.length})</h3>
-      {taskList.length > 0 ? (
-        <div className="space-y-2">
-          {taskList.map(task => (
-            <div key={task.id} className="flex items-center justify-between p-2 bg-gray-100 rounded">
-              <span className="font-medium">{task.taskName} ({task.systemId})</span>
-              <span className="text-sm text-gray-600 flex items-center gap-1">
-                <CalendarDays className="h-4 w-4" />
-                {task.displayDueDate}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : <p className="text-sm text-gray-500">No upcoming tasks match the current filters for this period.</p>}
-    </div>
-  );
+  }, [allTasks, filter]);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Upcoming Maintenance Schedule</CardTitle>
-        <div className="flex items-center gap-4 pt-4">
-            <Select value={systemFilter} onValueChange={setSystemFilter}>
-                <SelectTrigger className="w-[220px]">
-                    <SelectValue placeholder="Filter by System" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">-- Select a System --</SelectItem>
-                    {systems.map(sys => <SelectItem key={sys.id} value={sys.name}>{sys.name}</SelectItem>)}
-                </SelectContent>
-            </Select>
-            <Select value={frequencyFilter} onValueChange={setFrequencyFilter} disabled={systemFilter === 'all'}>
-                <SelectTrigger className="w-[220px]">
-                    <SelectValue placeholder="Filter by Frequency" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Frequencies</SelectItem>
-                    {['Weekly', 'Monthly', 'Quarterly', 'Semi-Annual', 'Annual'].map(freq => (
-                        <SelectItem key={freq} value={freq}>{freq}</SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
+        <div className="flex justify-between items-center">
+            <div>
+                <CardTitle>Upcoming Tasks</CardTitle>
+                <CardDescription>A look at what's next on the schedule.</CardDescription>
+            </div>
+            <div className="w-[220px]">
+                <Select value={filter} onValueChange={setFilter}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select View" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="next7days">Due in Next 7 Days</SelectItem>
+                        <SelectItem value="weekly">All Upcoming Weekly Tasks</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {systemFilter !== 'all' ? (
-          <>
-            {renderTaskList(tasksNextWeek, "Next 7 Days")}
-            {renderTaskList(tasksNextMonth, "Next 30 Days")}
-            {renderTaskList(tasksFuture, "Future Tasks")}
-          </>
-        ) : (
-          <div className="text-center text-gray-500 p-8">
-            <p>Please select a system to view its upcoming tasks.</p>
-          </div>
-        )}
+      <CardContent>
+          {filteredTasks.length > 0 ? (
+            <div className="space-y-2 mt-4 max-h-96 overflow-y-auto">
+              {filteredTasks.map(task => (
+                <div key={task.id} className="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
+                  <div>
+                    <p className="font-semibold">{task.taskDescription}</p>
+                    <p className="text-sm text-muted-foreground">{task.assetName}</p>
+                  </div>
+                  <div className="text-sm text-gray-600 flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4" />
+                    <span>{task.dueDate.toDate().toLocaleDateString()}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <p className="text-sm text-center text-gray-500 mt-6">No tasks match the selected view.</p>}
       </CardContent>
     </Card>
   );
