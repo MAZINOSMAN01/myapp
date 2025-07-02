@@ -8,15 +8,15 @@ import { db } from '../firebase/config.js';
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button"; // **تم تصحيح هذا السطر: من `=>` إلى `from`**
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-
-import { Wrench, Search, Plus, Edit, Clock, User, AlertCircle, Trash2, XCircle, Settings } from "lucide-react";
+import { Label } from "@/components/ui/label"; // **إضافة: استيراد Label**
+import { Wrench, Search, Plus, Edit, Clock, User, AlertCircle, Trash2, XCircle, Settings, DollarSign } from "lucide-react"; // **إضافة: استيراد DollarSign**
 
 export function WorkOrders() {
-  const [workOrders, setWorkOrders] = useState([]);
+  const [workOrders, setWorkOrders] = useState<any[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
 
@@ -30,6 +30,7 @@ export function WorkOrders() {
   const [currentFloor, setCurrentFloor] = useState('');
   const [currentType, setCurrentType] = useState('');
   const [currentAssignedTo, setCurrentAssignedTo] = useState('');
+  const [currentCost, setCurrentCost] = useState(''); // **إضافة: حالة لحقل التكلفة**
 
   // Dynamic dropdown lists
   const [facilitiesList, setFacilitiesList] = useState<any[]>([]);
@@ -135,6 +136,7 @@ export function WorkOrders() {
       setCurrentFloor(orderToEdit.floor || '');
       setCurrentType(orderToEdit.type || (workOrderTypesList.length > 0 ? workOrderTypesList[0].name : ''));
       setCurrentAssignedTo(orderToEdit.assignedTo || (usersList.length > 0 ? usersList[0].name : ''));
+      setCurrentCost(orderToEdit.cost ? String(orderToEdit.cost) : ''); // **إضافة: تحميل التكلفة**
     } else {
       setEditingOrder(null);
       setCurrentTitle('');
@@ -146,6 +148,7 @@ export function WorkOrders() {
       setCurrentFloor('');
       setCurrentType(workOrderTypesList.length > 0 ? workOrderTypesList[0].name : '');
       setCurrentAssignedTo(usersList.length > 0 ? usersList[0].name : '');
+      setCurrentCost(''); // **إضافة: إعادة تعيين التكلفة**
     }
     setIsFormOpen(true);
   };
@@ -153,6 +156,7 @@ export function WorkOrders() {
   const closeOrderForm = () => {
     setIsFormOpen(false);
     setEditingOrder(null);
+    // إعادة تعيين جميع حقول النموذج
     setCurrentTitle('');
     setCurrentDescription('');
     setCurrentPriority('Medium');
@@ -162,6 +166,7 @@ export function WorkOrders() {
     setCurrentFloor('');
     setCurrentType('');
     setCurrentAssignedTo('');
+    setCurrentCost(''); // **إضافة: إعادة تعيين التكلفة**
   };
 
   const handleSaveOrder = async () => {
@@ -180,6 +185,7 @@ export function WorkOrders() {
       floor: currentFloor,
       type: currentType,
       assignedTo: currentAssignedTo,
+      cost: parseFloat(currentCost) || 0, // **إضافة: حفظ التكلفة كرقم**
       created: editingOrder?.created || new Date().toISOString().slice(0, 10),
     };
 
@@ -279,18 +285,19 @@ export function WorkOrders() {
     }
   });
 
-  // Functions for managing facilities
+  // **تعديل: إصلاح دالة إضافة المرفق**
   const handleAddFacility = async () => {
-    if (newFacilityName.trim() === '') {
+    const name = newFacilityName.trim();
+    if (name === '') {
       alert("Please enter a new facility name.");
       return;
     }
-    if (facilitiesList.some(fac => fac.name.toLowerCase() === newFacilityName.trim().toLowerCase())) {
+    if (facilitiesList.some(fac => fac.name.toLowerCase() === name.toLowerCase())) {
       alert("This facility already exists.");
       return;
     }
     try {
-      await addDoc(collection(db, "facilities"), { name: newFacilityName.trim() });
+      await addDoc(collection(db, "facilities"), { name });
       setNewFacilityName('');
       fetchFacilities();
     } catch (e) { console.error("Error adding facility:", e); alert("An error occurred."); }
@@ -305,18 +312,19 @@ export function WorkOrders() {
     } catch (e) { console.error("Error deleting facility:", e); alert("An error occurred."); }
   };
 
-  // Functions for managing work order types
+  // **تعديل: إصلاح دالة إضافة النوع**
   const handleAddWorkOrderType = async () => {
-    if (newWorkOrderTypeName.trim() === '') {
+    const name = newWorkOrderTypeName.trim();
+    if (name === '') {
       alert("Please enter a new work order type name.");
       return;
     }
-    if (workOrderTypesList.some(type => type.name.toLowerCase() === newWorkOrderTypeName.trim().toLowerCase())) {
+    if (workOrderTypesList.some(type => type.name.toLowerCase() === name.toLowerCase())) {
       alert("This work order type already exists.");
       return;
     }
     try {
-      await addDoc(collection(db, "work_order_types"), { name: newWorkOrderTypeName.trim() });
+      await addDoc(collection(db, "work_order_types"), { name });
       setNewWorkOrderTypeName('');
       fetchWorkOrderTypes();
     } catch (e) { console.error("Error adding work order type:", e); alert("An error occurred."); }
@@ -353,106 +361,95 @@ export function WorkOrders() {
         </div>
       </div>
 
-      {/* New/Edit Work Order Form */}
-      {isFormOpen && (
-        <Card className="p-6 mt-6">
-          <CardTitle className="mb-4 text-xl">
-            {editingOrder ? "Edit Work Order" : "Create New Work Order"}
-          </CardTitle>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <Input
-              placeholder="Work Order Title"
-              value={currentTitle}
-              onChange={(e) => setCurrentTitle(e.target.value)}
-              className="col-span-full"
-            />
-            <Input
-              placeholder="Work Order Description"
-              value={currentDescription}
-              onChange={(e) => setCurrentDescription(e.target.value)}
-              className="col-span-full"
-            />
-            <Select value={currentPriority} onValueChange={setCurrentPriority}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="High">High</SelectItem>
-                <SelectItem value="Medium">Medium</SelectItem>
-                <SelectItem value="Low">Low</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={currentStatus} onValueChange={setCurrentStatus}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="In Progress">In Progress</SelectItem>
-                <SelectItem value="Completed">Completed</SelectItem>
-                <SelectItem value="Scheduled">Scheduled</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input
-              type="date"
-              placeholder="Due Date"
-              value={currentDueDate}
-              onChange={(e) => setCurrentDueDate(e.target.value)}
-              className="w-full"
-            />
-            {/* Dynamic Facility, Type, and Assigned To fields */}
-            <Select value={currentFacility} onValueChange={setCurrentFacility}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Facility" />
-              </SelectTrigger>
-              <SelectContent>
-                {facilitiesList.map((fac) => (
-                  <SelectItem key={fac.id} value={fac.name}>{fac.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
-              placeholder="Floor (optional)"
-              value={currentFloor}
-              onChange={(e) => setCurrentFloor(e.target.value)}
-              className="w-full"
-            />
-            <Select value={currentType} onValueChange={setCurrentType}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                {workOrderTypesList.map((type) => (
-                  <SelectItem key={type.id} value={type.name}>{type.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={currentAssignedTo} onValueChange={setCurrentAssignedTo}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Assigned To" />
-              </SelectTrigger>
-              <SelectContent>
-                {usersList.map((user) => (
-                  <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={closeOrderForm}>Cancel</Button>
-            <Button onClick={handleSaveOrder} className="bg-blue-600 hover:bg-blue-700">
-              {editingOrder ? "Save Changes" : "Save Work Order"}
-            </Button>
-            {editingOrder && (
-              <Button variant="destructive" onClick={handleDeleteOrder}>
-                <Trash2 className="h-4 w-4 mr-2" /> Delete Work Order
-              </Button>
-            )}
-          </div>
-        </Card>
-      )}
+      {/* **تعديل: استخدام Dialog بدلاً من Card** */}
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>{editingOrder ? "Edit Work Order" : "Create New Work Order"}</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+                <div className="md:col-span-2">
+                    <Label htmlFor="title">Work Order Title</Label>
+                    <Input id="title" placeholder="Work Order Title" value={currentTitle} onChange={(e) => setCurrentTitle(e.target.value)} />
+                </div>
+                <div className="md:col-span-2">
+                    <Label htmlFor="description">Work Order Description</Label>
+                    <Input id="description" placeholder="Work Order Description" value={currentDescription} onChange={(e) => setCurrentDescription(e.target.value)} />
+                </div>
+                 <div>
+                    <Label htmlFor="priority">Priority</Label>
+                    <Select value={currentPriority} onValueChange={setCurrentPriority}>
+                        <SelectTrigger id="priority"><SelectValue placeholder="Priority" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="High">High</SelectItem>
+                            <SelectItem value="Medium">Medium</SelectItem>
+                            <SelectItem value="Low">Low</SelectItem>
+                        </SelectContent>
+                    </Select>
+                 </div>
+                 <div>
+                    <Label htmlFor="status">Status</Label>
+                    <Select value={currentStatus} onValueChange={setCurrentStatus}>
+                        <SelectTrigger id="status"><SelectValue placeholder="Status" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="Pending">Pending</SelectItem>
+                            <SelectItem value="In Progress">In Progress</SelectItem>
+                            <SelectItem value="Completed">Completed</SelectItem>
+                            <SelectItem value="Scheduled">Scheduled</SelectItem>
+                        </SelectContent>
+                    </Select>
+                 </div>
+                 <div>
+                    <Label htmlFor="dueDate">Due Date</Label>
+                    <Input id="dueDate" type="date" value={currentDueDate} onChange={(e) => setCurrentDueDate(e.target.value)} />
+                 </div>
+                 {/* **إضافة: حقل التكلفة المفقود** */}
+                 <div>
+                    <Label htmlFor="cost">Estimated Cost</Label>
+                    <div className="relative">
+                        <DollarSign className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input id="cost" type="number" placeholder="0.00" className="pl-8" value={currentCost} onChange={(e) => setCurrentCost(e.target.value)} />
+                    </div>
+                 </div>
+                 <div>
+                    <Label htmlFor="facility">Facility</Label>
+                    <Select value={currentFacility} onValueChange={setCurrentFacility}>
+                        <SelectTrigger id="facility"><SelectValue placeholder="Facility" /></SelectTrigger>
+                        <SelectContent>{facilitiesList.map((fac) => (<SelectItem key={fac.id} value={fac.name}>{fac.name}</SelectItem>))}</SelectContent>
+                    </Select>
+                 </div>
+                 <div>
+                    <Label htmlFor="floor">Floor (optional)</Label>
+                    <Input id="floor" placeholder="e.g., 2nd Floor" value={currentFloor} onChange={(e) => setCurrentFloor(e.target.value)} />
+                 </div>
+                 <div>
+                    <Label htmlFor="type">Type</Label>
+                    <Select value={currentType} onValueChange={setCurrentType}>
+                        <SelectTrigger id="type"><SelectValue placeholder="Type" /></SelectTrigger>
+                        <SelectContent>{workOrderTypesList.map((type) => (<SelectItem key={type.id} value={type.name}>{type.name}</SelectItem>))}</SelectContent>
+                    </Select>
+                 </div>
+                 <div>
+                    <Label htmlFor="assignedTo">Assigned To</Label>
+                    <Select value={currentAssignedTo} onValueChange={setCurrentAssignedTo}>
+                        <SelectTrigger id="assignedTo"><SelectValue placeholder="Assigned To" /></SelectTrigger>
+                        <SelectContent>{usersList.map((user) => (<SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>))}</SelectContent>
+                    </Select>
+                 </div>
+            </div>
+            <DialogFooter className="flex justify-between w-full">
+                <div>
+                  {editingOrder && (<Button variant="destructive" onClick={handleDeleteOrder}><Trash2 className="h-4 w-4 mr-2" />Delete</Button>)}
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={closeOrderForm}>Cancel</Button>
+                  <Button onClick={handleSaveOrder}>{editingOrder ? "Save Changes" : "Create"}</Button>
+                </div>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* Search and Filter Display */}
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3">
           <Card>
@@ -485,7 +482,6 @@ export function WorkOrders() {
       </div>
 
 
-      {/* Work Order Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {filteredWorkOrders.length > 0 ? (
           filteredWorkOrders.map((order) => (
@@ -553,7 +549,6 @@ export function WorkOrders() {
         )}
       </div>
 
-      {/* Summary Stats - these numbers are dynamic now */}
       <Card>
         <CardHeader>
           <CardTitle>Work Order Statistics</CardTitle>
@@ -594,7 +589,6 @@ export function WorkOrders() {
         </CardContent>
       </Card>
 
-      {/* Dialog for Manage Facilities */}
       <Dialog open={isManageFacilitiesOpen} onOpenChange={setIsManageFacilitiesOpen}>
         <DialogContent>
           <DialogHeader>
@@ -640,7 +634,6 @@ export function WorkOrders() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog for Manage Work Order Types */}
       <Dialog open={isManageTypesOpen} onOpenChange={setIsManageTypesOpen}>
         <DialogContent>
           <DialogHeader>

@@ -43,6 +43,15 @@ interface CardStats {
   scheduledReports: number;
 }
 
+// **تعديل: الحالة الأولية لبيانات التقارير**
+const initialReportData: ReportData = {
+    workOrders: [],
+    maintenanceRecords: [],
+    issueLogs: [],
+    lessonsLearned: [],
+};
+
+
 export function Reports() {
   const [summaryStats, setSummaryStats] = useState({
     totalWorkOrders: 0,
@@ -58,16 +67,19 @@ export function Reports() {
     scheduledReports: 0,
   });
   
-  const [reportData, setReportData] = useState<ReportData | null>(null);
+  // **تعديل: استخدام الحالة الأولية المُعرفة مسبقًا**
+  const [reportData, setReportData] = useState<ReportData>(initialReportData);
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
 
   useEffect(() => {
     const fetchAllData = async () => {
+        setSummaryStats(prev => ({ ...prev, isLoading: true })); // ابدأ التحميل
       try {
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const maintenanceRef = collection(db, "maintenance_records");
         
+        // قد تحتاج هذه الاستعلامات إلى فهارس في Firestore
         const scheduledQuery = query(maintenanceRef, where("status", "==", "Scheduled"));
         const monthlyQuery = query(maintenanceRef, where("creationDate", ">=", Timestamp.fromDate(startOfMonth)));
 
@@ -113,19 +125,25 @@ export function Reports() {
         setCardStats({
           reportsGenerated: totalMaintenanceRecords,
           monthlyReports: monthlyCountSnapshot.data().count,
-          customReports: 0,
+          customReports: 0, // يمكنك تحديث هذا لاحقًا
           scheduledReports: scheduledCountSnapshot.data().count,
         });
 
       } catch (error) {
         console.error("Error fetching all report data:", error);
-        setSummaryStats(prevStats => ({ ...prevStats, isLoading: false }));
+        // **تعديل: تأكد من تحديث جميع الحالات عند حدوث خطأ**
+        setSummaryStats({
+            totalWorkOrders: 0,
+            totalMaintenanceRecords: 0,
+            totalMaintenanceCost: 0,
+            isLoading: false
+        });
+        setReportData(initialReportData); // إعادة التعيين إلى الحالة الأولية الفارغة
       }
     };
     fetchAllData();
   }, []);
 
-  // ** تعديل: تمت إضافة dataSource لتحديد نوع البيانات **
   const handleGenerateCustomReport = (data: DocumentData[], columns: string[], dataSource: keyof ReportData) => {
     if (!data || data.length === 0) {
       alert("No data available for the selected source.");
@@ -133,7 +151,6 @@ export function Reports() {
       return;
     }
 
-    // ** إضافة: قاموس للترجمة العكسية من العربية إلى الإنجليزية **
     const maintenanceTypeReverseTranslations: { [key: string]: string } = {
       'صيانة وقائية': 'Preventive Maintenance',
       'صيانة تصحيحية (إصلاح)': 'Corrective Maintenance (Repair)',
@@ -145,7 +162,6 @@ export function Reports() {
       const newRow: { [key: string]: any } = {};
       columns.forEach(col => {
         let value = row[col];
-        // ** تعديل: التحقق من مصدر البيانات والعمود لتوحيد اللغة **
         if (dataSource === 'maintenanceRecords' && col === 'maintenanceType') {
           if (maintenanceTypeReverseTranslations[value]) {
             value = maintenanceTypeReverseTranslations[value];
@@ -170,7 +186,7 @@ export function Reports() {
   };
 
 
-  if (summaryStats.isLoading || !reportData) {
+  if (summaryStats.isLoading) {
     return <p>Loading reports...</p>;
   }
 
@@ -250,7 +266,7 @@ export function Reports() {
           <TabsContent value="maintenance" className="mt-4"><MaintenanceSummaryReport data={reportData.maintenanceRecords} /></TabsContent>
           <TabsContent value="issue_log" className="mt-4"><IssueLogReport data={reportData.issueLogs} /></TabsContent>
           <TabsContent value="lessons_learned" className="mt-4"><LessonsLearnedReport data={reportData.lessonsLearned} /></TabsContent>
-          <TabsContent value="financial" className="mt-4"><FinancialReport data={reportData.maintenanceRecords} /></TabsContent>
+          <TabsContent value="financial" className="mt-4"><FinancialReport /></TabsContent>
         </Tabs>
       </div>
     </div>

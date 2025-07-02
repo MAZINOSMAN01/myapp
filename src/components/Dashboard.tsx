@@ -6,7 +6,7 @@ import { Users, ClipboardList, CheckCircle, AlertTriangle } from "lucide-react";
 import { Bar, BarChart, Pie, PieChart, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 
-// ... واجهات البيانات تبقى كما هي ...
+// --- Interfaces ---
 interface DashboardStats {
   totalUsers: number;
   workOrders: {
@@ -25,7 +25,7 @@ interface MaintenanceCostData {
   cost: number;
 }
 
-// **تعديل:** قاموس لترجمة واختصار أنواع الصيانة للمخطط الشريطي
+// قاموس لترجمة واختصار أنواع الصيانة للمخطط الشريطي
 const maintenanceTypeTranslations: { [key: string]: string } = {
   'Preventive Maintenance': 'Preventive',
   'Corrective Maintenance (Repair)': 'Corrective',
@@ -41,7 +41,7 @@ const statusTranslations: { [key: string]: string } = {
   'Scheduled': 'مجدول' 
 };
 
-// **إضافة: تعريف إعدادات الألوان للمخططات**
+// تعريف إعدادات الألوان للمخططات
 const pieChartConfig = {
   value: {
     label: "Work Orders",
@@ -102,7 +102,7 @@ export function Dashboard() {
           workOrders: {
             completed: completedCount.data().count,
             open: openCount.data().count,
-            overdue: 0,
+            overdue: 0, // Note: Overdue logic needs to be implemented separately if required
           },
           isLoading: false,
         });
@@ -124,7 +124,7 @@ export function Dashboard() {
           const type = record.maintenanceType || 'Uncategorized';
           costByType[type] = (costByType[type] || 0) + (record.cost || 0);
         });
-        // **تعديل:** استخدام القاموس لاختصار الأسماء
+        
         const barData = Object.entries(costByType).map(([name, cost]) => ({
           name: maintenanceTypeTranslations[name] || name,
           cost
@@ -161,7 +161,6 @@ export function Dashboard() {
             <ChartContainer config={pieChartConfig} className="mx-auto aspect-square h-[300px]">
               <PieChart>
                 <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
-                {/* **تعديل:** إزالة label من هنا واستخدام Cell لتلوين كل قطعة ** */}
                 <Pie data={workOrderStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100}>
                   {workOrderStatusData.map((_entry, index) => (
                     <Cell key={`cell-${index}`} fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]} />
@@ -179,15 +178,14 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <ChartContainer config={barChartConfig} className="aspect-auto h-[300px] w-full">
-              {/* **تعديل:** استخدام accessibilityLayer لمنع الخطأ مع BarChart */}
               <BarChart data={maintenanceCostData} accessibilityLayer>
                 <CartesianGrid vertical={false} />
-                {/* **تعديل:** إزالة tickFormatter من هنا لأننا اختصرنا الأسماء في البيانات نفسها */}
                 <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
                 <YAxis />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Legend />
-                <Bar dataKey="cost" fill="var(--color-cost)" radius={4} />
+                {/* --- التعديل الوحيد هنا --- */}
+                <Bar dataKey="cost" fill="#8884d8" radius={4} />
               </BarChart>
             </ChartContainer>
           </CardContent>

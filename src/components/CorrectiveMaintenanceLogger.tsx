@@ -1,142 +1,187 @@
-import React, { useState, useRef } from 'react';
-import { useReactToPrint } from 'react-to-print';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+/******************************************************************
+ *  CorrectiveMaintenanceLogger.tsx
+ *  يُستخدم لتسجيل أعمال الصيانة التصحيحية (CM)
+ *  آخر تحديث: أُضيف حقل systems إلى Props   ★
+ ******************************************************************/
+
+import React, { useState } from 'react';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Input
+} from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { MaintenanceTask, User } from './MaintenanceManagement';
+import { DollarSign, FilePlus } from 'lucide-react';
 
-/* ---------- Printable ---------- */
-interface PrintableProps {
-  logData: {
-    systemId: string; subSystem: string; description: string;
-    assignedTo: string; logDate: string; users: User[];
-  };
-}
-const PrintableContent = React.forwardRef<HTMLDivElement, PrintableProps>(
-  ({ logData }, ref) => {
-    const { systemId, subSystem, description, assignedTo, logDate, users } = logData;
-    const techName = users.find((u) => u.id === assignedTo)?.name ?? 'N/A';
-    return (
-      <div ref={ref} className="p-8 font-sans">
-        <h1 className="text-2xl font-bold border-b pb-2 mb-6">Corrective Maintenance Report</h1>
-        <div className="grid grid-cols-2 gap-4 text-base">
-          <div><strong>Date:</strong> {logDate}</div>
-          <div><strong>System:</strong> {systemId}</div>
-          <div><strong>Sub-System:</strong> {subSystem || 'N/A'}</div>
-          <div><strong>Technician:</strong> {techName}</div>
-        </div>
-        <div className="mt-6">
-          <strong className="block border-b pb-1 mb-2">Description of Work</strong>
-          <p className="whitespace-pre-wrap">{description}</p>
-        </div>
-        <div className="mt-12 text-center">
-          <div className="inline-block border-t-2 pt-2 px-4">Technician’s Signature</div>
-        </div>
-      </div>
-    );
-  },
-);
-PrintableContent.displayName = 'PrintableContent';
+import { MaintenanceTask, User } from './MaintenanceManagement'; // تأكّد من المسار الصحيح
 
-/* ---------- Main ---------- */
+/* ---------------------------------------------------------------- */
+/* واجهة الخصائص                                                    */
+/* ---------------------------------------------------------------- */
 interface Props {
+  /** أنظمة الموقع (يُستخدم لاختيار النظام الذى حدثت فيه الصيانة) ★ */
   systems: { id: string; name: string }[];
+
+  /** جميع المستخدمين (لاختيار الفنى أو المسؤول) */
   users: User[];
-  onSave: (data: Partial<MaintenanceTask>) => Promise<void>;   // ← void
+
+  /** حفظ السجل – يجب أن تُرجِع Promise<void> */
+  onSave: (data: Partial<MaintenanceTask>) => Promise<void>;
+
+  /** إغلاق النموذج */
   onClose: () => void;
+
+  /** قيم افتراضية عند التعديل (اختيارى) */
+  defaultValues?: Partial<MaintenanceTask>;
 }
 
-export const CorrectiveMaintenanceLogger: React.FC<Props> = ({
-  systems, users, onSave, onClose,
+/* ---------------------------------------------------------------- */
+/* المكوّن                                                           */
+/* ---------------------------------------------------------------- */
+const CorrectiveMaintenanceLogger: React.FC<Props> = ({
+  systems,
+  users,
+  onSave,
+  onClose,
+  defaultValues
 }) => {
-  const [systemId, setSystemId] = useState('');
-  const [subSystem, setSubSystem] = useState('');
-  const [description, setDescription] = useState('');
-  const [assignedTo, setAssignedTo] = useState('');
-  const [logDate, setLogDate] = useState(new Date().toISOString().split('T')[0]);
-  const printRef = useRef<HTMLDivElement>(null);
+  /* ------------------------ Local State ----------------------- */
+  const [systemId, setSystemId] = useState(
+    defaultValues?.systemId ?? (systems[0]?.id ?? '')
+  );
+  const [assetName, setAssetName] = useState(
+    defaultValues?.assetName ?? ''
+  );
+  const [description, setDescription] = useState(
+    defaultValues?.notes ?? ''
+  );
+  const [cost, setCost] = useState(
+    defaultValues?.estimatedCost?.toString() ?? ''
+  );
+  const [assignedTo, setAssignedTo] = useState(
+    defaultValues?.assignedTo ?? (users[0]?.id ?? '')
+  );
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = async () => {
-    if (!systemId || !description.trim() || !assignedTo) {
-      alert('Please fill all required fields.');
-      throw new Error('validation-failed');
+  /* ------------------------ Handlers -------------------------- */
+  const handleSubmit = async () => {
+    if (!description.trim()) {
+      alert('Please enter a description of the corrective work.');
+      return;
     }
-    await onSave({
-      systemId,
-      taskName: `Corrective: ${subSystem || description.slice(0, 30)}`,
-      maintenanceType: 'CM',
-      frequency: 'One-Off',
-      description: `Location/Sub-System: ${subSystem}\n\nDetails: ${description}`,
-      assignedTo,
-      status: 'Completed',
-      nextDueDate: logDate,
-    });
+    setIsSaving(true);
+    try {
+      await onSave({
+        systemId,
+        maintenanceType: 'CM',
+        taskName: assetName,
+        notes: description,
+        estimatedCost: parseFloat(cost || '0'),
+        assignedTo,
+        status: 'Completed'
+      });
+      onClose();
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save the corrective maintenance log.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handlePrint = useReactToPrint({
-    content: () => printRef.current as HTMLDivElement,
-    documentTitle: `Corrective-Maintenance-${systemId || 'NA'}-${logDate}`,
-    onBeforeGetContent: handleSave,   // يحفظ أولاً
-    onAfterPrint: onClose,
-  });
-
+  /* -------------------------- UI ------------------------------ */
   return (
-    <div className="space-y-4">
-      {/* منطقة الطباعة المخفيّة */}
-      <div className="hidden">
-        <PrintableContent
-          ref={printRef}
-          logData={{ systemId, subSystem, description, assignedTo, logDate, users }}
+    <div className="space-y-6">
+      {/* نظام الصيانة */}
+      <div>
+        <label className="block font-medium mb-1">System *</label>
+        <Select value={systemId} onValueChange={setSystemId}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select System" />
+          </SelectTrigger>
+          <SelectContent>
+            {systems.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* اسم المعدة / الأصل (اختيارى) */}
+      <div>
+        <label className="block font-medium mb-1">Asset / Task Name</label>
+        <Input
+          placeholder="e.g. AHU-01 belt replacement"
+          value={assetName}
+          onChange={(e) => setAssetName(e.target.value)}
         />
       </div>
 
-      {/* الحقول */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-1">
-          <Label>System *</Label>
-          <Select value={systemId} onValueChange={setSystemId}>
-            <SelectTrigger><SelectValue placeholder="Select system" /></SelectTrigger>
-            <SelectContent>
-              {systems.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label>Sub-System / Location (optional)</Label>
-          <Input value={subSystem} onChange={e => setSubSystem(e.target.value)} />
-        </div>
+      {/* الوصف */}
+      <div>
+        <label className="block font-medium mb-1">Description *</label>
+        <Textarea
+          rows={4}
+          placeholder="Describe what was fixed / replaced / adjusted…"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
       </div>
 
-      <div className="space-y-1">
-        <Label>Description of Work *</Label>
-        <Textarea value={description} onChange={e => setDescription(e.target.value)} className="min-h-[120px]" />
+      {/* تكلفة تقديرية */}
+      <div className="relative">
+        <label className="block font-medium mb-1">Cost (SAR)</label>
+        <DollarSign className="absolute left-3 top-10 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="number"
+          className="pl-8"
+          placeholder="0"
+          value={cost}
+          onChange={(e) => setCost(e.target.value)}
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-1">
-          <Label>Technician *</Label>
-          <Select value={assignedTo} onValueChange={setAssignedTo}>
-            <SelectTrigger><SelectValue placeholder="Select technician" /></SelectTrigger>
-            <SelectContent>
-              {users.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label>Date of Action</Label>
-          <Input type="date" value={logDate} onChange={e => setLogDate(e.target.value)} />
-        </div>
+      {/* المكلَّف */}
+      <div>
+        <label className="block font-medium mb-1">Performed By *</label>
+        <Select value={assignedTo} onValueChange={setAssignedTo}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select Technician" />
+          </SelectTrigger>
+          <SelectContent>
+            {users.map((u) => (
+              <SelectItem key={u.id} value={u.id}>
+                {u.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* الأزرار */}
-      <div className="flex justify-end pt-4 gap-2">
-        <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button onClick={handlePrint}>Save &amp; Print Report</Button>
+      {/* أزرار */}
+      <div className="flex justify-end gap-2 pt-4">
+        <Button variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          onClick={handleSubmit}
+          disabled={isSaving}
+          className="flex items-center gap-2"
+        >
+          <FilePlus className="h-4 w-4" />
+          {isSaving ? 'Saving…' : 'Save Log'}
+        </Button>
       </div>
     </div>
   );
 };
+
+export default CorrectiveMaintenanceLogger;
