@@ -2,24 +2,28 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '@/firebase/config';
-import { collection, onSnapshot, doc, writeBatch, Timestamp, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, writeBatch, Timestamp, addDoc, deleteDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { ShieldCheck, Eye, SlidersHorizontal } from 'lucide-react';
+import { ShieldCheck, Eye, SlidersHorizontal, Edit, Trash2 } from 'lucide-react';
 import { CreateMaintenancePlan } from './CreateMaintenancePlan';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { MaintenanceChecklist } from './MaintenanceChecklist';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export interface Asset { id: string; name: string; }
+
+// --- تعديل: إضافة خيارات التكرار الجديدة ---
+export type Frequency = 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Semi-annually' | 'Annually';
+
 export interface MaintenancePlan {
     id: string;
     planName: string;
     tasks: string[];
     assetId: string;
     assetName?: string;
-    frequency: 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually';
+    frequency: Frequency;
     startDate: Timestamp;
 }
 
@@ -27,6 +31,7 @@ export function PreventiveMaintenance() {
     const [assets, setAssets] = useState<Asset[]>([]);
     const [plans, setPlans] = useState<MaintenancePlan[]>([]);
     const [isPlanFormOpen, setIsPlanFormOpen] = useState(false);
+    const [editingPlan, setEditingPlan] = useState<MaintenancePlan | null>(null);
     const [filters, setFilters] = useState({ assetId: '', frequency: '' });
     const { toast } = useToast();
 
@@ -48,13 +53,14 @@ export function PreventiveMaintenance() {
                     ...data,
                     tasks: data.tasks || [],
                     assetName: asset?.name || 'Unknown Asset'
-                } as MaintenancePlan
+                } as MaintenancePlan;
             });
             setPlans(plansData);
         });
         return () => unsubPlans();
     }, [assets]);
     
+    // --- تعديل: تحديث منطق إنشاء المهام ---
     const handlePlanCreated = async (plan: any) => {
         const batch = writeBatch(db);
         let tasksGeneratedCount = 0;
@@ -76,9 +82,13 @@ export function PreventiveMaintenance() {
                 tasksGeneratedCount++;
             });
 
-            switch (plan.frequency) {
+            switch (plan.frequency as Frequency) {
+                case 'Daily': nextDueDate.setDate(nextDueDate.getDate() + 1); break;
                 case 'Weekly': nextDueDate.setDate(nextDueDate.getDate() + 7); break;
                 case 'Monthly': nextDueDate.setMonth(nextDueDate.getMonth() + 1); break;
+                case 'Quarterly': nextDueDate.setMonth(nextDueDate.getMonth() + 3); break;
+                case 'Semi-annually': nextDueDate.setMonth(nextDueDate.getMonth() + 6); break;
+                case 'Annually': nextDueDate.setFullYear(nextDueDate.getFullYear() + 1); break;
                 default: break;
             }
         }
@@ -90,6 +100,23 @@ export function PreventiveMaintenance() {
             toast({ title: "Error", description: "Failed to generate tasks.", variant: "destructive" });
         }
     };
+
+    const handleEditPlan = (plan: MaintenancePlan) => {
+        setEditingPlan(plan);
+        setIsPlanFormOpen(true);
+    };
+
+    const handleDeletePlan = async (plan: MaintenancePlan) => {
+        if(window.confirm(`Are you sure you want to delete the entire plan "${plan.planName}"? This action will also delete all associated future tasks and cannot be undone.`)) {
+            try {
+                await deleteDoc(doc(db, 'maintenance_plans', plan.id));
+                toast({ title: "Plan Deleted", description: `The plan "${plan.planName}" has been removed.`});
+            } catch (error) {
+                console.error("Error deleting plan: ", error);
+                toast({ title: "Error", description: "Could not delete the plan.", variant: "destructive" });
+            }
+        }
+    }
 
     const filteredPlans = useMemo(() => {
         return plans.filter(plan => {
@@ -103,7 +130,7 @@ export function PreventiveMaintenance() {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">Preventive Maintenance Plans</h2>
-                <Button onClick={() => setIsPlanFormOpen(true)}>
+                <Button onClick={() => { setEditingPlan(null); setIsPlanFormOpen(true); }}>
                     <ShieldCheck className="mr-2 h-4 w-4" /> Create New PM Plan
                 </Button>
             </div>
@@ -123,8 +150,12 @@ export function PreventiveMaintenance() {
                             <SelectTrigger className="w-[200px]"><SelectValue placeholder="All Frequencies" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Frequencies</SelectItem>
+                                <SelectItem value="Daily">Daily</SelectItem>
                                 <SelectItem value="Weekly">Weekly</SelectItem>
                                 <SelectItem value="Monthly">Monthly</SelectItem>
+                                <SelectItem value="Quarterly">Quarterly</SelectItem>
+                                <SelectItem value="Semi-annually">Semi-annually</SelectItem>
+                                <SelectItem value="Annually">Annually</SelectItem>
                             </SelectContent>
                         </Select>
                         <Button variant="ghost" onClick={() => setFilters({ assetId: '', frequency: '' })}>Reset</Button>
@@ -143,17 +174,31 @@ export function PreventiveMaintenance() {
                                         Includes {plan.tasks?.length || 0} task(s).
                                     </p>
                                 </CardContent>
-                                <CardFooter>
+                                <CardFooter className="flex justify-between">
                                     <Dialog>
                                         <DialogTrigger asChild>
-                                            <Button className="w-full">
+                                            <Button>
                                                 <Eye className="mr-2 h-4 w-4" /> View Checklist
                                             </Button>
                                         </DialogTrigger>
                                         <DialogContent className="max-w-6xl h-[90vh] flex flex-col">
+                                            <DialogHeader>
+                                                <DialogTitle>{plan.planName} Checklist</DialogTitle>
+                                                <DialogDescription>
+                                                    {plan.assetName} - {plan.frequency} - Plan starts on {plan.startDate.toDate().toLocaleDateString()}
+                                                </DialogDescription>
+                                            </DialogHeader>
                                             <MaintenanceChecklist plan={plan} />
                                         </DialogContent>
                                     </Dialog>
+                                    <div className="flex gap-2">
+                                        <Button variant="outline" size="icon" onClick={() => handleEditPlan(plan)}>
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                        <Button variant="destructive" size="icon" onClick={() => handleDeletePlan(plan)}>
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 </CardFooter>
                             </Card>
                         ))}
@@ -171,6 +216,7 @@ export function PreventiveMaintenance() {
                 onClose={() => setIsPlanFormOpen(false)} 
                 assets={assets} 
                 onPlanCreated={handlePlanCreated}
+                editingPlan={editingPlan} 
             />
         </div>
     );
