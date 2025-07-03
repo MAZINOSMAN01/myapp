@@ -1,78 +1,89 @@
 // functions/src/index.ts
+/* eslint-disable @typescript-eslint/no-var-requires */
 
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 
-// Initialize Firebase Admin SDK
+/* ─── v2 SDKs (جديدة) ───────────────────────────────────── */
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+
+/* المنطق المساعد الذي سنضيفه كموديولات منفصلة */
+import { generateWeeklyTasks } from "./modules/generateWeeklyTasks";
+import { archiveTasks } from "./modules/archiveTasks";
+
+/* ─── تهيئة Firebase Admin ─────────────────────────────── */
 admin.initializeApp();
 const db = admin.firestore();
 
-/**
- * Cloud Function to update dashboard statistics whenever a work order changes.
- * This function triggers on any write (create, update, delete) to the work_orders collection.
- */
+/* ──────────────────────────────────────────────────────────
+ * 1) تحديث إحصاءات لوحة التحكم (كودك الأصلي دون تعديل)
+ * ──────────────────────────────────────────────────────────*/
 export const updateDashboardStats = functions.firestore
   .document("work_orders/{orderId}")
-  .onWrite(async (change, context) => {
-    console.log("Work order changed, updating dashboard stats...");
+  .onWrite(async (change, _context) => {
+    console.log("Work order changed, updating dashboard stats…");
 
-    // Get a reference to the work_orders collection
     const workOrdersRef = db.collection("work_orders");
     const snapshot = await workOrdersRef.get();
 
-    let open = 0;
-    let completed = 0;
-    let inProgress = 0;
-    let overdue = 0;
+    let open = 0,
+      completed = 0,
+      inProgress = 0,
+      overdue = 0;
     const now = new Date();
 
-    // Loop through all work orders and calculate stats
     snapshot.forEach((doc) => {
       const order = doc.data();
       if (
-        order.status === "Open" ||
-        order.status === "Pending" ||
-        order.status === "Scheduled" ||
-        order.status === "In Progress"
-      ) {
+        ["Open", "Pending", "Scheduled", "In Progress"].includes(order.status)
+      )
         open++;
-      }
-      if (order.status === "Completed") {
-        completed++;
-      }
-      if (order.status === "In Progress") {
-        inProgress++;
-      }
+      if (order.status === "Completed") completed++;
+      if (order.status === "In Progress") inProgress++;
 
-      // Check for overdue orders
       if (order.dueDate) {
-        // Firestore timestamps need to be converted to JS Date objects
-        const dueDate = new Date(order.dueDate);
-        if (order.status !== "Completed" && dueDate < now) {
-          overdue++;
-        }
+        const due = new Date(order.dueDate);
+        if (order.status !== "Completed" && due < now) overdue++;
       }
     });
 
-    // Get total users count
-    const usersSnapshot = await db.collection("users").get();
-    const totalUsers = usersSnapshot.size;
+    const totalUsers = (await db.collection("users").get()).size;
 
-    // Data to be saved in the summary document
     const stats = {
       openOrders: open,
       completedOrders: completed,
       inProgressOrders: inProgress,
       overdueOrders: overdue,
-      totalUsers: totalUsers,
-      lastUpdated: admin.firestore.FieldValue.serverTimestamp(), // Track when it was last updated
+      totalUsers,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
     };
 
     console.log("Calculated Stats:", stats);
-
-    // Get a reference to the summary document and set the new stats
-    const summaryRef = db.collection("summaries").doc("dashboard_summary");
-
-    // Using .set() will create the document if it doesn't exist, or overwrite it if it does.
-    return summaryRef.set(stats);
+    return db.collection("summaries").doc("dashboard_summary").set(stats);
   });
+
+/* ──────────────────────────────────────────────────────────
+ * 2) weeklyTaskGenerator — يولّد مهام الأسابيع القادمة
+ *    (يعمل كل إثنين 00:05 UTC)
+ * ──────────────────────────────────────────────────────────*/
+export const weeklyTaskGenerator = onSchedule(
+  {
+    schedule: "every monday 00:05",
+    timezone: "UTC",
+    region: "us-central1",
+  },
+  async () => generateWeeklyTasks(db)
+);
+
+/* ──────────────────────────────────────────────────────────
+ * 3) autoArchiveTasks — يؤرشف المهام بعد 14 يوماً من اكتمالها
+ *    (Trigger عند أي تحديث لمستند المهمة)
+ * ──────────────────────────────────────────────────────────*/
+export const autoArchiveTasks = onDocumentUpdated(
+  {
+    document: "maintenance_plans/{planId}/tasks/{taskId}",
+    region: "us-central1",
+  },
+  (event) => archiveTasks(event)
+);
