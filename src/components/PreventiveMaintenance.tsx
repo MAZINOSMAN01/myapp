@@ -81,9 +81,10 @@ export function PreventiveMaintenance() {
     MaintenancePlan | null
   >(null)
   const [filters, setFilters] = useState({
-    assetId: '',
+    system: '',
     frequency: '',
   })
+  const systemOptions = Array.from(new Set(assets.map((a) => a.name)))
   const { toast } = useToast()
 
   // Load assets + their types
@@ -239,13 +240,13 @@ export function PreventiveMaintenance() {
   const filteredPlans = useMemo(
     () =>
       plans.filter((p) => {
-        const aOK = filters.assetId
-          ? p.assetId === filters.assetId
+        const sysOK = filters.system
+          ? p.assetName === filters.system
           : true
         const fOK = filters.frequency
           ? p.frequency === filters.frequency
           : true
-        return aOK && fOK
+         return sysOK && fOK
       }),
     [plans, filters]
   )
@@ -273,11 +274,11 @@ export function PreventiveMaintenance() {
           <div className="flex gap-4 items-center">
             <SlidersHorizontal className="h-5 w-5" />
             <Select
-              value={filters.assetId}
+                value={filters.system}
               onValueChange={(v) =>
                 setFilters((f) => ({
                   ...f,
-                  assetId: v === 'all' ? '' : v,
+                 system: v === 'all' ? '' : v,
                 }))
               }
             >
@@ -288,9 +289,9 @@ export function PreventiveMaintenance() {
                 <SelectItem value="all">
                   All Systems
                 </SelectItem>
-                {assets.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name}
+                   {systemOptions.map((name) => (
+                  <SelectItem key={name} value={name}>
+                    {name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -332,7 +333,7 @@ export function PreventiveMaintenance() {
             <Button
               variant="ghost"
               onClick={() =>
-                setFilters({ assetId: '', frequency: '' })
+                 setFilters({ system: '', frequency: '' })
               }
             >
               Reset

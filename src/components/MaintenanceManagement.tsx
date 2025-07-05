@@ -14,7 +14,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { PlusCircle, SlidersHorizontal, ShieldCheck, Wrench, RefreshCw } from 'lucide-react';
 import { CreateMaintenancePlan } from './CreateMaintenancePlan';
-
+import type { Asset, NewMaintenancePlan } from './PreventiveMaintenance';
 // --- Data Interfaces ---
 interface MaintenanceTask {
     id: string;
@@ -29,7 +29,7 @@ interface MaintenanceTask {
     completionNotes?: string;
     cost?: number;
 }
-interface Asset { id: string; name: string; }
+
 interface User { id: string; name: string; }
 interface MaintenancePlan {
     id: string;
@@ -54,7 +54,9 @@ export function MaintenanceManagement() {
     const [correctiveFormData, setCorrectiveFormData] = useState<Partial<MaintenanceTask>>({});
     
     // Filter States
-    const [filters, setFilters] = useState({ status: '', type: '', assetId: '' });
+    
+    const [filters, setFilters] = useState({ status: '', type: '', system: '' });
+    const systemOptions = Array.from(new Set(assets.map(a => a.name)));
     
     const { toast } = useToast();
 
@@ -173,10 +175,10 @@ export function MaintenanceManagement() {
 
     const filteredTasks = useMemo(() => {
         return tasks.filter(task => {
-            const statusMatch = filters.status ? task.status === filters.status : true;
+             const statusMatch = filters.status ? task.status === filters.status : true;
             const typeMatch = filters.type ? task.type === filters.type : true;
-            const assetMatch = filters.assetId ? task.assetId === filters.assetId : true;
-            return statusMatch && typeMatch && assetMatch;
+                  const systemMatch = filters.system ? task.assetName === filters.system : true;
+            return statusMatch && typeMatch && systemMatch;
         });
     }, [tasks, filters]);
     
@@ -231,11 +233,11 @@ export function MaintenanceManagement() {
                     <SlidersHorizontal className="inline-block mr-2 h-5 w-5" />
                     Filters
                 </h3>
-                <Select value={filters.assetId || "all"} onValueChange={(value) => setFilters(f => ({ ...f, assetId: value === "all" ? "" : value }))}>
-                    <SelectTrigger className="w-[180px]"><SelectValue placeholder="All Assets" /></SelectTrigger>
+                    <Select value={filters.system || "all"} onValueChange={(value) => setFilters(f => ({ ...f, system: value === "all" ? "" : value }))}>
+                    <SelectTrigger className="w-[180px]"><SelectValue placeholder="All Systems" /></SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">All Assets</SelectItem>
-                        {assets.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                          <SelectItem value="all">All Systems</SelectItem>
+                        {systemOptions.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
                     </SelectContent>
                 </Select>
                 <Select value={filters.type || "all"} onValueChange={(value) => setFilters(f => ({ ...f, type: value === "all" ? "" : value }))}>
@@ -256,12 +258,14 @@ export function MaintenanceManagement() {
                         <SelectItem value="Skipped">Skipped</SelectItem>
                     </SelectContent>
                 </Select>
-                <Button variant="ghost" onClick={() => setFilters({ status: '', type: '', assetId: '' })}>Reset</Button>
+                 <Button variant="ghost" onClick={() => setFilters({ status: '', type: '', system: '' })}>Reset</Button>
             </div>
 
             <DataTable columns={columns} data={filteredTasks} filterColumn="taskDescription" />
 
-            <CreateMaintenancePlan isOpen={isPlanFormOpen} onClose={() => setIsPlanFormOpen(false)} assets={assets} />
+            <CreateMaintenancePlan isOpen={isPlanFormOpen} onClose={() => setIsPlanFormOpen(false)} assets={assets} onPlanCreated={function (plan: NewMaintenancePlan): Promise<void> {
+                throw new Error('Function not implemented.');
+            } } />
 
             <Dialog open={isCorrectiveFormOpen} onOpenChange={setIsCorrectiveFormOpen}>
                 <DialogContent>
