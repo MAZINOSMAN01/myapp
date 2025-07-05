@@ -3,6 +3,7 @@
 // ─── استيرادات أساسية ─────────────────────────────────────
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
+import { deletePlanTasks } from "./modules/deletePlanTasks";
 
 // ─── الوحدات المساعدة الجديدة ─────────────────────────────
 import { generateWeeklyTasks } from "./modules/generateWeeklyTasks";
@@ -24,10 +25,21 @@ export const weeklyTaskGenerator = functions.pubsub
   .schedule("0 5 * * 1")   // كرون: الدقيقة 0، الساعة 5 UTC، يوم الإثنين
   .timeZone("UTC")
   .onRun(async () => {
+    // التعديل الوحيد هنا: استدعاء الدالة المصدَّرة generateWeeklyTasks(db)
     await generateWeeklyTasks(db);
+  });
+
+/* 2.1) onPlanDelete — Trigger عند حذف خطة الصيانة */
+export const onPlanDelete = functions.firestore
+  .document("maintenance_plans/{planId}")
+  .onDelete(async (_snap, context) => {
+    const planId = context.params.planId;
+    if (!planId) return;
+    await deletePlanTasks(planId);
   });
 
 /* 3) autoArchiveTasks — Trigger عند تحديث كل مهمة */
 export const autoArchiveTasks = functions.firestore
   .document("maintenance_plans/{planId}/tasks/{taskId}")
   .onUpdate((change, context) => archiveTasks(change, context));
+

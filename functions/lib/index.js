@@ -34,10 +34,11 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.autoArchiveTasks = exports.weeklyTaskGenerator = exports.updateDashboardStats = void 0;
+exports.autoArchiveTasks = exports.onPlanDelete = exports.weeklyTaskGenerator = exports.updateDashboardStats = void 0;
 // ─── استيرادات أساسية ─────────────────────────────────────
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
+const deletePlanTasks_1 = require("./modules/deletePlanTasks");
 // ─── الوحدات المساعدة الجديدة ─────────────────────────────
 const generateWeeklyTasks_1 = require("./modules/generateWeeklyTasks");
 const archiveTasks_1 = require("./modules/archiveTasks");
@@ -55,7 +56,17 @@ exports.weeklyTaskGenerator = functions.pubsub
     .schedule("0 5 * * 1") // كرون: الدقيقة 0، الساعة 5 UTC، يوم الإثنين
     .timeZone("UTC")
     .onRun(async () => {
+    // التعديل الوحيد هنا: استدعاء الدالة المصدَّرة generateWeeklyTasks(db)
     await (0, generateWeeklyTasks_1.generateWeeklyTasks)(db);
+});
+/* 2.1) onPlanDelete — Trigger عند حذف خطة الصيانة */
+exports.onPlanDelete = functions.firestore
+    .document("maintenance_plans/{planId}")
+    .onDelete(async (_snap, context) => {
+    const planId = context.params.planId;
+    if (!planId)
+        return;
+    await (0, deletePlanTasks_1.deletePlanTasks)(planId);
 });
 /* 3) autoArchiveTasks — Trigger عند تحديث كل مهمة */
 exports.autoArchiveTasks = functions.firestore

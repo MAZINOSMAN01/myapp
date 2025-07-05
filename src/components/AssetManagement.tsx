@@ -1,17 +1,21 @@
-import React, { useEffect, useState } from 'react'
-import {
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  arrayUnion,
-} from 'firebase/firestore'
+import React, { useEffect, useState ,useMemo} from 'react'
+
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, arrayUnion } from 'firebase/firestore'
 import { db } from '@/firebase/config'
 
 import { Button } from '@/components/ui/button'
+import { useToast } from '@/components/ui/use-toast'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Dialog,
   DialogTrigger,
@@ -41,9 +45,11 @@ export interface AssetDoc {
 export function AssetManagement() {
   const [assets, setAssets] = useState<AssetDoc[]>([])
   const [filterSystem, setFilterSystem] = useState<string>('all')
+  const [filterType, setFilterType] = useState('')
 
   const [isOpen, setIsOpen] = useState(false)
   const [editingAsset, setEditingAsset] = useState<AssetDoc | null>(null)
+  const [assetToDelete, setAssetToDelete] = useState<AssetDoc | null>(null)
 
   // الحقول
   const [assetName, setAssetName] = useState('')
@@ -54,9 +60,13 @@ export function AssetManagement() {
   const [customName, setCustomName] = useState('')
   const [isCustomName, setIsCustomName] = useState(false)
 
+  const { toast } = useToast()
+
   const loadAssets = async () => {
     const snap = await getDocs(collection(db, 'assets'))
-    const list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as AssetDoc))
+    const list = snap.docs.map(
+      d => ({ id: d.id, ...(d.data() as Omit<AssetDoc, 'id'>) } as AssetDoc),
+    )
     setAssets(list)
   }
 
@@ -115,27 +125,55 @@ export function AssetManagement() {
       loadAssets()
     } catch (e) {
       console.error(e)
-      alert('Error saving asset.')
+      toast({
+        title: 'Error Saving Asset',
+        description: 'An error occurred while saving the asset.',
+        variant: 'destructive',
+      })
     }
   }
 
-  const handleDeleteAsset = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this asset and all its types?')) {
-      return
-    }
+  const promptDeleteAsset = (asset: AssetDoc) => {
+    setAssetToDelete(asset)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!assetToDelete) return
     try {
-      await deleteDoc(doc(db, 'assets', id))
+      // The Cloud Functions 'onAssetDeletedTrigger' and 'onPlanDeletedTrigger'
+      // will now handle deleting all associated plans and tasks.
+      // We just need to delete the asset document itself.
+      await deleteDoc(doc(db, 'assets', assetToDelete.id))
+      toast({
+        title: 'Asset Deleted',
+        description: `The system "${assetToDelete.name}" and all related data have been deleted.`,
+      })
       loadAssets()
     } catch (e) {
       console.error(e)
-      alert('Error deleting asset.')
+      toast({
+        title: 'Error Deleting Asset',
+        description: 'An error occurred while deleting the asset and its related plans/tasks.',
+        variant: 'destructive',
+      })
+    } finally {
+      setAssetToDelete(null)
     }
   }
 
   // فلترة الأصول
-  const displayed = assets
-    .filter(a => filterSystem === 'all' || a.name === filterSystem)
-    .flatMap(a => a.types.map(tp => ({ ...a, singleType: tp })))
+  const displayed = useMemo(
+    () =>
+      assets
+        .filter(a => filterSystem === 'all' || a.name === filterSystem)
+        .flatMap(a => a.types.map(tp => ({ ...a, singleType: tp })))
+        .filter(
+          a =>
+            filterType.trim() === '' ||
+            a.singleType.toLowerCase().includes(filterType.trim().toLowerCase()),
+        ),
+    [assets, filterSystem, filterType],
+  )
 
   const systemOptions = Array.from(new Set(assets.map(a => a.name)))
 
@@ -143,22 +181,30 @@ export function AssetManagement() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Asset &amp; System Management</h2>
-        <Select
-          value={filterSystem}
-          onValueChange={v => setFilterSystem(v)}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="All Systems" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Systems</SelectItem>
-            {systemOptions.map(name => (
-              <SelectItem key={name} value={name}>
-                {name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Search by type..."
+            value={filterType}
+            onChange={e => setFilterType(e.target.value)}
+            className="w-[200px]"
+          />
+          <Select
+            value={filterSystem}
+            onValueChange={v => setFilterSystem(v)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="All Systems" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Systems</SelectItem>
+              {systemOptions.map(name => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -258,7 +304,7 @@ export function AssetManagement() {
                   <Button
                     variant="destructive"
                     size="icon"
-                    onClick={() => handleDeleteAsset(asset.id)}
+                    onClick={() => promptDeleteAsset(asset)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -277,6 +323,27 @@ export function AssetManagement() {
           </p>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={!!assetToDelete}
+        onOpenChange={open => !open && setAssetToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. Deleting the system{' '}
+              <strong>"{assetToDelete?.name}"</strong> will also permanently delete all of its types,
+              associated maintenance plans, and all scheduled tasks.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
