@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider, useAuth } from './context/AuthContext'; 
+import { DatabaseMigration } from './components/DatabaseMigration';
 
 // --- استيراد كل المكونات والصفحات ---
 
@@ -29,6 +30,7 @@ import { LessonsLearned } from './components/LessonsLearned';
 import { SpaceManagement } from './components/SpaceManagement'; 
 import { CleaningManagement } from './components/CleaningManagement';
 import { QuotationsInvoicing } from './components/QuotationsInvoicing';
+import { ArchiveReports } from './components/ArchiveReports';
 
 
 const queryClient = new QueryClient();
@@ -69,6 +71,8 @@ function AppRoutes() {
           <Route path="mots" element={<MOTsManagement />} />
           <Route path="user-management" element={<UserManagement />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="archive-reports" element={<ArchiveReports />} />
+          <Route path="database-migration" element={<DatabaseMigration />} />
         </Route>
       </Route>
       

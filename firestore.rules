@@ -1,0 +1,138 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // دالة مساعدة للتحقق من دور المستخدم
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    // دالة مساعدة للتحقق من الأذونات
+    function hasPermission(allowedRoles) {
+      return request.auth != null && getUserRole() in allowedRoles;
+    }
+
+    // قواعد المستخدمين
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if hasPermission(['High Manager', 'Engineer']);
+    }
+
+    // قواعد الأصول
+    match /assets/{assetId} {
+      allow read: if request.auth != null;
+      allow write: if hasPermission(['High Manager', 'Engineer']);
+    }
+
+    // قواعد خطط الصيانة  
+    match /maintenance_plans/{planId} {
+      allow read: if request.auth != null;
+      allow write: if hasPermission(['High Manager', 'Engineer']);
+      
+      // المهام الفرعية
+      match /tasks/{taskId} {
+        allow read: if request.auth != null;
+        allow write: if hasPermission(['High Manager', 'Engineer', 'Technician']);
+      }
+    }
+
+    // قواعد مهام الصيانة
+    match /maintenance_tasks/{taskId} {
+      allow read: if request.auth != null;
+      allow create: if hasPermission(['High Manager', 'Engineer']);
+      allow update: if hasPermission(['High Manager', 'Engineer', 'Technician']) || 
+                       (request.auth.uid == resource.data.assignedTo);
+      allow delete: if hasPermission(['High Manager', 'Engineer']);
+    }
+
+    // قواعد أوامر العمل
+    match /work_orders/{orderId} {
+      allow read: if request.auth != null;
+      allow create: if hasPermission(['High Manager', 'Engineer']);
+      allow update: if hasPermission(['High Manager', 'Engineer', 'Technician']) || 
+                       (request.auth.uid == resource.data.assignedTo);
+      allow delete: if hasPermission(['High Manager', 'Engineer']);
+    }
+
+    // قواعد سجل المشاكل
+    match /issue_logs/{issueId} {
+      allow read: if request.auth != null;
+      allow write: if hasPermission(['High Manager', 'Engineer', 'Technician']);
+    }
+
+    // ============ قواعد جديدة لتقارير الأرشيف ============
+    
+    // قواعد التقارير المولدة
+    match /generated_reports/{reportId} {
+      allow read: if request.auth != null && 
+        (hasPermission(['High Manager', 'Engineer']) || 
+         resource.data.generatedBy == request.auth.uid);
+      allow create: if hasPermission(['High Manager', 'Engineer']);
+      allow update: if hasPermission(['High Manager']) || 
+                       resource.data.generatedBy == request.auth.uid;
+      allow delete: if hasPermission(['High Manager']) || 
+                       resource.data.generatedBy == request.auth.uid;
+    }
+
+    // قواعد إحصائيات النظام
+    match /system_stats/{statsId} {
+      allow read: if request.auth != null;
+      // الكتابة مسموحة فقط من Cloud Functions
+      allow write: if false;
+    }
+
+    // قواعد إحصائيات لوحة التحكم
+    match /dashboard_stats/{statsId} {
+      allow read: if request.auth != null;
+      // الكتابة مسموحة فقط من Cloud Functions
+      allow write: if false;
+    }
+
+    // قواعد سجلات الأرشفة
+    match /archive_logs/{logId} {
+      allow read: if hasPermission(['High Manager', 'Engineer']);
+      // الكتابة مسموحة فقط من Cloud Functions
+      allow write: if false;
+    }
+
+    // قواعد البيانات المؤقتة للتصدير
+    match /export_cache/{cacheId} {
+      allow read: if request.auth != null && resource.data.requestedBy == request.auth.uid;
+      allow create: if request.auth != null;
+      allow delete: if request.auth.uid == resource.data.requestedBy;
+      // منع التحديث لضمان أمان البيانات
+      allow update: if false;
+    }
+
+    // قواعد طلبات التقارير
+    match /report_requests/{requestId} {
+      allow read: if request.auth != null && 
+        (hasPermission(['High Manager', 'Engineer']) || 
+         resource.data.requestedBy == request.auth.uid);
+      allow create: if request.auth != null;
+      allow update: if resource.data.requestedBy == request.auth.uid;
+      allow delete: if hasPermission(['High Manager']) || 
+                       resource.data.requestedBy == request.auth.uid;
+    }
+
+    // قواعد مؤشرات الأداء
+    match /performance_metrics/{metricId} {
+      allow read: if hasPermission(['High Manager', 'Engineer']);
+      // الكتابة مسموحة فقط من Cloud Functions
+      allow write: if false;
+    }
+
+    // قواعد سجلات التدقيق
+    match /audit_logs/{logId} {
+      allow read: if hasPermission(['High Manager']);
+      // الكتابة مسموحة فقط من Cloud Functions
+      allow write: if false;
+    }
+
+    // قواعد عامة: منع الوصول لأي مجموعة غير محددة
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -252,50 +252,150 @@ export const manualTaskGeneration = onRequest(
 );
 
 /**
- * نقطة نهاية للحصول على إحصائيات النظام
+ * نقطة نهاية لتوليد تقارير الأرشيف (للبيانات التاريخية)
  */
-export const systemStats = onRequest(
+export const generateArchiveReport = onRequest(
   {
     region: "us-central1",
-    memory: "256MiB",
+    memory: "1GiB", // ذاكرة أكبر للتعامل مع كميات كبيرة من البيانات
+    timeoutSeconds: 540, // 9 دقائق للتقارير الكبيرة
   },
   async (req, res) => {
     try {
-      if (req.method !== 'GET') {
+      if (req.method !== 'POST') {
         res.status(405).json({ error: 'Method not allowed' });
         return;
       }
-      
-      const db = admin.firestore();
-      
-      // جمع الإحصائيات
-      const [
-        tasksSnapshot,
-        plansSnapshot,
-        workOrdersSnapshot,
-        usersSnapshot
-      ] = await Promise.all([
-        db.collection('maintenance_tasks').count().get(),
-        db.collection('maintenance_plans').count().get(),
-        db.collection('work_orders').count().get(),
-        db.collection('users').count().get()
-      ]);
-      
-      const stats = {
-        totalTasks: tasksSnapshot.data().count,
-        totalPlans: plansSnapshot.data().count,
-        totalWorkOrders: workOrdersSnapshot.data().count,
-        totalUsers: usersSnapshot.data().count,
-        timestamp: new Date().toISOString(),
-        region: "us-central1"
-      };
-      
-      res.status(200).json(stats);
-      
+
+      // التحقق من الهوية
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      const {
+        reportType = 'maintenance',
+        dateFrom,
+        dateTo,
+        status = 'all',
+        includeFinancials = true,
+        format = 'json',
+        requestedBy = 'unknown'
+      } = req.body;
+
+      logger.info("📊 Archive report generation requested", {
+        reportType,
+        dateRange: `${dateFrom} to ${dateTo}`,
+        requestedBy,
+        userAgent: req.headers['user-agent']
+      });
+
+      // استيراد الوحدة محلياً لتجنب مشاكل التبعيات
+      const { generateArchiveReport: generateReport, convertToCSV } = 
+        await import('./modules/archiveReportsGenerator.js');
+
+      const reportData = await generateReport({
+        reportType,
+        dateFrom,
+        dateTo,
+        status,
+        includeFinancials,
+        format,
+        requestedBy
+      });
+
+      if (!reportData.success) {
+        res.status(500).json({
+          error: 'Report generation failed',
+          details: reportData.error
+        });
+        return;
+      }
+
+      // إرسال الاستجابة حسب التنسيق المطلوب
+      if (format === 'csv') {
+        const csvContent = convertToCSV(reportData.data || []);
+        
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader(
+          'Content-Disposition', 
+          `attachment; filename="archive_report_${reportType}_${new Date().toISOString().split('T')[0]}.csv"`
+        );
+        res.status(200).send('\uFEFF' + csvContent); // BOM للعربية
+      } else {
+        res.status(200).json({
+          success: true,
+          recordCount: reportData.recordCount,
+          generatedAt: reportData.generatedAt,
+          data: reportData.data,
+          message: `تم توليد تقرير يحتوي على ${reportData.recordCount} سجل بنجاح`
+        });
+      }
+
+      logger.info("✅ Archive report generated successfully", {
+        recordCount: reportData.recordCount,
+        format,
+        requestedBy
+      });
+
     } catch (error) {
-      logger.error("❌ Failed to get system stats", { error });
-      res.status(500).json({ 
-        error: 'Failed to retrieve stats',
+      logger.error("❌ Archive report generation failed", { error });
+      res.status(500).json({
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+);
+
+/**
+ * نقطة نهاية للبحث المتقدم في الأرشيف
+ */
+export const advancedArchiveSearch = onRequest(
+  {
+    region: "us-central1",
+    memory: "512MiB",
+    timeoutSeconds: 300,
+  },
+  async (req, res) => {
+    try {
+      if (req.method !== 'POST') {
+        res.status(405).json({ error: 'Method not allowed' });
+        return;
+      }
+
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      const searchParams = req.body;
+
+      logger.info("🔍 Advanced archive search requested", { searchParams });
+
+      const { advancedArchiveSearch: performSearch } = 
+       await import('./modules/archiveReportsGenerator.js');
+
+      const results = await performSearch(searchParams);
+
+      res.status(200).json({
+        success: true,
+        recordCount: results.length,
+        data: results,
+        searchParams,
+        generatedAt: new Date().toISOString()
+      });
+
+      logger.info("✅ Advanced archive search completed", {
+        recordCount: results.length
+      });
+
+    } catch (error) {
+      logger.error("❌ Advanced archive search failed", { error });
+      res.status(500).json({
+        error: 'Search failed',
         message: error instanceof Error ? error.message : 'Unknown error'
       });
     }
