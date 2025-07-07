@@ -10,11 +10,15 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 
+// ⭐ --- هذا هو الإصلاح --- ⭐
+// تعريف الأدوار في مصفوفة لتجنب تكرار الكود وجعله أكثر مرونة
+const roles = ['High Manager', 'Engineer', 'Technician'];
+
 export function SignupPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('Engineer');
+  const [role, setRole] = useState('Engineer'); // قيمة افتراضية
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const auth = getAuth();
@@ -22,22 +26,25 @@ export function SignupPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!role) {
+      setError('Please select a role.');
+      return;
+    }
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
+      // حفظ بيانات المستخدم الإضافية في Firestore
       await setDoc(doc(db, "users", user.uid), {
-        name: name,
+        displayName: name, // استخدام displayName ليكون متوافقًا مع باقي المكونات
         email: email,
         role: role,
         status: 'Active',
       });
       
-      navigate('/');
+      navigate('/'); // توجيه المستخدم إلى الصفحة الرئيسية بعد التسجيل الناجح
     } catch (err: any) {
-      // ** هذا هو التعديل المهم **
-      // الآن سنعرض رسائل خطأ دقيقة بناءً على نوع الخطأ من Firebase
-      console.error("Firebase signup error:", err.code, err.message); // لطباعة الخطأ الكامل في الـ console
+      console.error("Firebase signup error:", err.code);
       
       if (err.code === 'auth/weak-password') {
         setError('Password is too weak. It must be at least 6 characters long.');
@@ -46,7 +53,6 @@ export function SignupPage() {
       } else if (err.code === 'auth/email-already-in-use') {
         setError('This email is already registered. Please log in.');
       } else {
-        // لأي خطأ آخر، اعرض الرسالة العامة
         setError('Failed to create an account. Please try again.');
       }
     }
@@ -64,12 +70,17 @@ export function SignupPage() {
             <Input placeholder="Full Name" value={name} onChange={(e) => setName(e.target.value)} required />
             <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <Input type="password" placeholder="Password (at least 6 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            
+            {/* ⭐ --- هذا هو الإصلاح --- ⭐ */}
+            {/* استخدام .map لعرض الأدوار من المصفوفة بشكل ديناميكي */}
             <Select value={role} onValueChange={setRole}>
               <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="High Manager">High Manager</SelectItem>
-                <SelectItem value="Engineer">Engineer</SelectItem>
-                <SelectItem value="Technician">Technician</SelectItem>
+                {roles.map((roleOption) => (
+                  <SelectItem key={roleOption} value={roleOption}>
+                    {roleOption}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             {error && <p className="text-red-500 text-sm">{error}</p>}

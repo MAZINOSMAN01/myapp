@@ -5,14 +5,9 @@ import { Download } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { DocumentData } from 'firebase/firestore';
+import { DocumentData, Timestamp } from 'firebase/firestore'; // Import Timestamp
 
-interface WorkOrder {
-  id: string;
-  [key: string]: any;
-}
-
-// ... دوال الألوان والترجمة تبقى كما هي ...
+// Helper functions for styling remain the same
 const getStatusColor = (status: string) => {
   switch (status) {
     case "Completed": return "bg-green-100 text-green-800";
@@ -32,24 +27,34 @@ const getPriorityColor = (priority: string) => {
   }
 };
 
-const statusTranslations: { [key: string]: string } = { 'In Progress': 'قيد التنفيذ', 'Completed': 'مكتمل', 'Pending': 'معلق', 'Scheduled': 'مجدول' };
-const priorityTranslations: { [key: string]: string } = { 'High': 'عالية', 'Medium': 'متوسطة', 'Low': 'منخفضة' };
-
-
 export function WorkOrderSummaryReport({ data: workOrders }: { data: DocumentData[] }) {
-  // تم حذف useEffect لجلب البيانات
 
   const handleDownloadCSV = () => {
-    // ... دالة التحميل تبقى كما هي
     if (workOrders.length === 0) {
       alert("No data to download.");
       return;
     }
-    const csv = Papa.unparse(workOrders, {
+    
+    // Format the data for CSV export
+    const dataToExport = workOrders.map(order => {
+        const assignedToText = Array.isArray(order.assignedTo) ? order.assignedTo.join(', ') : order.assignedTo;
+        
+        return {
+            title: order.title,
+            status: order.status,
+            priority: order.priority,
+            assignedTo: assignedToText,
+            // Ensure dueDate is correctly formatted
+            dueDate: order.dueDate && order.dueDate.toDate ? order.dueDate.toDate().toLocaleDateString('en-US') : 'Not set'
+        };
+    });
+
+    const csv = Papa.unparse(dataToExport, {
         columns: ['title', 'status', 'priority', 'assignedTo', 'dueDate'],
         header: true,
     });
-    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' }); 
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); // Removed BOM for standard CSV
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
@@ -58,6 +63,17 @@ export function WorkOrderSummaryReport({ data: workOrders }: { data: DocumentDat
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Helper function to format the date
+  const formatDate = (date: any) => {
+    if (date && date instanceof Timestamp) {
+      return date.toDate().toLocaleDateString('en-US'); // US date format
+    }
+    if(date && typeof date === 'string') {
+        return new Date(date).toLocaleDateString('en-US');
+    }
+    return 'Not set'; // Default value
   };
 
   return (
@@ -85,11 +101,13 @@ export function WorkOrderSummaryReport({ data: workOrders }: { data: DocumentDat
               {workOrders.length > 0 ? (
                 workOrders.map((order) => (
                   <TableRow key={order.id}>
-                    <TableCell className="font-medium text-right">{order.title}</TableCell>
-                    <TableCell><Badge className={getStatusColor(order.status)}>{statusTranslations[order.status] || order.status}</Badge></TableCell>
-                    <TableCell><Badge className={getPriorityColor(order.priority)}>{priorityTranslations[order.priority] || order.priority}</Badge></TableCell>
-                    <TableCell className="text-right">{order.assignedTo}</TableCell>
-                    <TableCell>{order.dueDate}</TableCell>
+                    <TableCell className="font-medium">{order.title}</TableCell>
+                    <TableCell><Badge className={`${getStatusColor(order.status)} hover:bg-opacity-80`}>{order.status}</Badge></TableCell>
+                    <TableCell><Badge className={`${getPriorityColor(order.priority)} hover:bg-opacity-80`}>{order.priority}</Badge></TableCell>
+                    {/* Handle array or string for assignedTo */}
+                    <TableCell>{Array.isArray(order.assignedTo) ? order.assignedTo.join(', ') : order.assignedTo}</TableCell>
+                    {/* Use the helper function to display the date */}
+                    <TableCell>{formatDate(order.dueDate)}</TableCell>
                   </TableRow>
                 ))
               ) : (

@@ -8,7 +8,7 @@ import {
   deleteDoc,
   doc,
   writeBatch,
-  addDoc,         // ← import addDoc
+  addDoc,
   Timestamp,
 } from 'firebase/firestore'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ import {
   SlidersHorizontal,
   Edit,
   Trash2,
+  MapPin,
 } from 'lucide-react'
 import { CreateMaintenancePlan } from './CreateMaintenancePlan'
 import {
@@ -45,11 +46,24 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+
+export interface User {
+  id: string
+  name: string
+}
+
+// Update to match AssetManagement.tsx structure
+export interface AssetType {
+  name: string
+  location?: string
+}
 
 export interface Asset {
   id: string
   name: string
-  types: string[]
+  types: AssetType[] // Changed from string[] to AssetType[]
+  location?: string
 }
 
 export type Frequency =
@@ -66,15 +80,18 @@ export interface NewMaintenancePlan {
   tasks: string[]
   frequency: Frequency
   firstDueDate: Timestamp
+  assignedTo?: string
 }
 
 export interface MaintenancePlan extends NewMaintenancePlan {
   id: string
   assetName: string
+  location?: string
 }
 
 export function PreventiveMaintenance() {
   const [assets, setAssets] = useState<Asset[]>([])
+  const [users, setUsers] = useState<User[]>([])
   const [plans, setPlans] = useState<MaintenancePlan[]>([])
   const [isPlanFormOpen, setIsPlanFormOpen] = useState(false)
   const [editingPlan, setEditingPlan] = useState<
@@ -83,8 +100,13 @@ export function PreventiveMaintenance() {
   const [filters, setFilters] = useState({
     system: '',
     frequency: '',
+    location: '',
   })
   const systemOptions = Array.from(new Set(assets.map((a) => a.name)))
+  // Extract all unique locations from asset types
+  const locationOptions = Array.from(new Set(
+    assets.flatMap((a) => a.types.map((t) => t.location).filter(Boolean))
+  ))
   const { toast } = useToast()
 
   // Load assets + their types
@@ -94,15 +116,42 @@ export function PreventiveMaintenance() {
       (snap) => {
         const list = snap.docs.map((d) => {
           const raw = d.data() as any
+          // Handle both old and new data structures
+          const types = raw.types || []
+          const convertedTypes = types.map((type: any) => {
+            // If type is string (old data), convert to AssetType
+            if (typeof type === 'string') {
+              return { name: type, location: raw.location || '' }
+            }
+            // If type is AssetType (new data), return as is
+            return type
+          })
+          
           return {
             id: d.id,
             name: raw.name,
-            types: raw.types || [],
+            types: convertedTypes,
+            location: raw.location, // Keep for backward compatibility
           } as Asset
         })
         setAssets(list)
       }
     )
+    return () => unsub()
+  }, [])
+
+  // Load users
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'users'), (snap) => {
+      const list = snap.docs.map(
+        (d) =>
+          ({
+            id: d.id,
+            name: d.data().name,
+          } as User)
+      )
+      setUsers(list)
+    })
     return () => unsub()
   }, [])
 
@@ -123,6 +172,8 @@ export function PreventiveMaintenance() {
             frequency: raw.frequency,
             firstDueDate: raw.firstDueDate,
             assetName: asset?.name ?? 'Unknown',
+            location: asset?.location,
+            assignedTo: raw.assignedTo,
           } as MaintenancePlan
         })
         setPlans(list)
@@ -145,6 +196,7 @@ export function PreventiveMaintenance() {
           tasks: newPlan.tasks,
           frequency: newPlan.frequency,
           firstDueDate: newPlan.firstDueDate,
+          assignedTo: newPlan.assignedTo || null,
         }
       )
 
@@ -169,6 +221,7 @@ export function PreventiveMaintenance() {
             type: 'Preventive',
             status: 'Pending',
             dueDate: Timestamp.fromDate(next),
+            assignedTo: newPlan.assignedTo || null,
           })
           count++
         })
@@ -246,7 +299,10 @@ export function PreventiveMaintenance() {
         const fOK = filters.frequency
           ? p.frequency === filters.frequency
           : true
-         return sysOK && fOK
+        const locationOK = filters.location
+          ? p.location === filters.location
+          : true
+        return sysOK && fOK && locationOK
       }),
     [plans, filters]
   )
@@ -271,14 +327,16 @@ export function PreventiveMaintenance() {
       {/* Filters + list of plans */}
       <Card>
         <CardHeader>
-          <div className="flex gap-4 items-center">
+          <div className="flex gap-4 items-center flex-wrap">
             <SlidersHorizontal className="h-5 w-5" />
+            
+            {/* System Filter */}
             <Select
-                value={filters.system}
+              value={filters.system}
               onValueChange={(v) =>
                 setFilters((f) => ({
                   ...f,
-                 system: v === 'all' ? '' : v,
+                  system: v === 'all' ? '' : v,
                 }))
               }
             >
@@ -289,7 +347,7 @@ export function PreventiveMaintenance() {
                 <SelectItem value="all">
                   All Systems
                 </SelectItem>
-                   {systemOptions.map((name) => (
+                {systemOptions.map((name) => (
                   <SelectItem key={name} value={name}>
                     {name}
                   </SelectItem>
@@ -297,6 +355,7 @@ export function PreventiveMaintenance() {
               </SelectContent>
             </Select>
 
+            {/* Frequency Filter */}
             <Select
               value={filters.frequency}
               onValueChange={(v) =>
@@ -330,10 +389,35 @@ export function PreventiveMaintenance() {
               </SelectContent>
             </Select>
 
+            {/* Location Filter */}
+            <Select
+              value={filters.location}
+              onValueChange={(v) =>
+                setFilters((f) => ({
+                  ...f,
+                  location: v === 'all' ? '' : v,
+                }))
+              }
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Locations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  All Locations
+                </SelectItem>
+                {locationOptions.map((location) => (
+                  <SelectItem key={location} value={location}>
+                    {location}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Button
               variant="ghost"
               onClick={() =>
-                 setFilters({ system: '', frequency: '' })
+                setFilters({ system: '', frequency: '', location: '' })
               }
             >
               Reset
@@ -344,28 +428,42 @@ export function PreventiveMaintenance() {
         <CardContent>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredPlans.map((plan) => (
-              <Card key={plan.id}>
-                <CardHeader>
-                  <CardTitle>{plan.planName}</CardTitle>
-                  <CardDescription>
-                    {plan.assetName} — {plan.frequency}{' '}
-                    {plan.firstDueDate && (
-                      <>— Starts{' '}
-                      {plan.firstDueDate
-                        .toDate()
-                        .toLocaleDateString()}
-                      </>
+              <Card key={plan.id} className="relative">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-lg">{plan.planName}</CardTitle>
+                      <CardDescription className="mt-1">
+                        <div className="flex items-center gap-1 text-sm">
+                          <span>{plan.assetName}</span>
+                          <span className="text-muted-foreground">•</span>
+                          <span>{plan.frequency}</span>
+                        </div>
+                        {plan.firstDueDate && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Starts {plan.firstDueDate.toDate().toLocaleDateString()}
+                          </div>
+                        )}
+                      </CardDescription>
+                    </div>
+                    
+                    {/* Location Badge */}
+                    {plan.location && (
+                      <Badge variant="outline" className="ml-2 flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        <span className="text-xs">{plan.location}</span>
+                      </Badge>
                     )}
-                  </CardDescription>
+                  </div>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent className="pt-0">
                   <p className="text-sm text-muted-foreground">
                     Includes {plan.tasks.length} task(s).
                   </p>
                 </CardContent>
 
-                <CardFooter className="flex justify-between">
+                <CardFooter className="flex justify-between pt-3">
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button>
@@ -375,17 +473,19 @@ export function PreventiveMaintenance() {
                     </DialogTrigger>
                     <DialogContent className="max-w-4xl h-[80vh]">
                       <DialogHeader>
-                        <DialogTitle>
+                        <DialogTitle className="flex items-center gap-2">
                           {plan.planName} Checklist
+                          {plan.location && (
+                            <Badge variant="outline" className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3" />
+                              {plan.location}
+                            </Badge>
+                          )}
                         </DialogTitle>
                         <DialogDescription>
-                          {plan.assetName} — {plan.frequency}{' '}
+                          {plan.assetName} — {plan.frequency}
                           {plan.firstDueDate && (
-                            <>— Starts{' '}
-                            {plan.firstDueDate
-                              .toDate()
-                              .toLocaleDateString()}
-                            </>
+                            <> — Starts {plan.firstDueDate.toDate().toLocaleDateString()}</>
                           )}
                         </DialogDescription>
                       </DialogHeader>
@@ -426,6 +526,7 @@ export function PreventiveMaintenance() {
         isOpen={isPlanFormOpen}
         onClose={() => setIsPlanFormOpen(false)}
         assets={assets}
+        users={users}
         onPlanCreated={handlePlanCreated}
         editingPlan={editingPlan ?? undefined}
       />

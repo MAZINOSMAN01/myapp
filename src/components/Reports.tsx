@@ -18,24 +18,27 @@ import { Plus, FileText, CalendarDays, BarChart, Clock } from "lucide-react";
 
 import { CustomReportBuilder } from './CustomReportBuilder';
 import { WorkOrderSummaryReport } from './WorkOrderSummaryReport';
-import { MaintenanceSummaryReport } from './MaintenanceSummaryReport';
+import { MaintenanceSummaryReport, MaintenanceRecord } from './MaintenanceSummaryReport'; // Import the specific type
 import { FinancialReport } from './FinancialReport';
 import { IssueLogReport } from './IssueLogReport';
 import { LessonsLearnedReport } from './LessonsLearnedReport';
 
-interface MaintenanceRecord {
-  cost?: number;
-  status?: string;
-  [key: string]: any;
-}
+// This mapping helps standardize maintenance types from different sources
+const maintenanceTypeMap: { [key: string]: string } = {
+  'Preventive': 'Preventive Maintenance',
+  'Corrective': 'Corrective Maintenance (Repair)',
+  'Predictive': 'Predictive Maintenance (Inspection)',
+};
 
+// Main data structure for all fetched reports
 interface ReportData {
   workOrders: DocumentData[];
-  maintenanceRecords: DocumentData[];
+  maintenanceRecords: MaintenanceRecord[]; // Use the specific type here
   issueLogs: DocumentData[];
   lessonsLearned: DocumentData[];
 }
 
+// Stats for the top cards
 interface CardStats {
   reportsGenerated: number;
   monthlyReports: number;
@@ -43,14 +46,12 @@ interface CardStats {
   scheduledReports: number;
 }
 
-// **تعديل: الحالة الأولية لبيانات التقارير**
 const initialReportData: ReportData = {
     workOrders: [],
     maintenanceRecords: [],
     issueLogs: [],
     lessonsLearned: [],
 };
-
 
 export function Reports() {
   const [summaryStats, setSummaryStats] = useState({
@@ -67,21 +68,20 @@ export function Reports() {
     scheduledReports: 0,
   });
   
-  // **تعديل: استخدام الحالة الأولية المُعرفة مسبقًا**
   const [reportData, setReportData] = useState<ReportData>(initialReportData);
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
 
   useEffect(() => {
     const fetchAllData = async () => {
-        setSummaryStats(prev => ({ ...prev, isLoading: true })); // ابدأ التحميل
+        setSummaryStats(prev => ({ ...prev, isLoading: true }));
       try {
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const maintenanceRef = collection(db, "maintenance_records");
+        const maintenanceRef = collection(db, "maintenance_tasks");
         
-        // قد تحتاج هذه الاستعلامات إلى فهارس في Firestore
+        // Firestore queries might require indexes
         const scheduledQuery = query(maintenanceRef, where("status", "==", "Scheduled"));
-        const monthlyQuery = query(maintenanceRef, where("creationDate", ">=", Timestamp.fromDate(startOfMonth)));
+        const monthlyQuery = query(maintenanceRef, where("dueDate", ">=", Timestamp.fromDate(startOfMonth)));
 
         const [
           workOrdersSnapshot,
@@ -90,6 +90,7 @@ export function Reports() {
           lessonsSnapshot,
           scheduledCountSnapshot,
           monthlyCountSnapshot,
+          assetsSnapshot,
         ] = await Promise.all([
           getDocs(collection(db, "work_orders")),
           getDocs(maintenanceRef),
@@ -97,10 +98,25 @@ export function Reports() {
           getDocs(collection(db, "lessons_learned")),
           getCountFromServer(scheduledQuery),
           getCountFromServer(monthlyQuery),
+          getDocs(collection(db, "assets")),
         ]);
 
+        const assetsMap = new Map(assetsSnapshot.docs.map(doc => [doc.id, doc.data().name]));
+        
+        // ⭐ FIX: Explicitly cast the mapped data to MaintenanceRecord[]
+        const maintenanceData: MaintenanceRecord[] = maintenanceSnapshot.docs.map(doc => {
+            const task = doc.data();
+            return {
+              id: doc.id,
+              assetName: assetsMap.get(task.assetId) || 'Unknown Asset',
+              maintenanceType: maintenanceTypeMap[task.type] || task.type,
+              status: task.status,
+              cost: task.cost || 0,
+              date: task.dueDate, // Keep original timestamp for potential use
+            } as MaintenanceRecord; // Asserting the type after mapping
+        });
+
         const workOrdersData = workOrdersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const maintenanceData = maintenanceSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const issuesData = issuesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const lessonsData = lessonsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
@@ -111,69 +127,45 @@ export function Reports() {
           lessonsLearned: lessonsData,
         });
 
-        const totalWorkOrders = workOrdersSnapshot.size;
-        const totalMaintenanceRecords = maintenanceSnapshot.size;
-        const totalMaintenanceCost = (maintenanceData as MaintenanceRecord[]).reduce((sum, record) => sum + (record.cost || 0), 0);
+        const totalMaintenanceCost = maintenanceData.reduce((sum, record) => sum + (record.cost || 0), 0);
         
         setSummaryStats({
-          totalWorkOrders,
-          totalMaintenanceRecords,
+          totalWorkOrders: workOrdersSnapshot.size,
+          totalMaintenanceRecords: maintenanceSnapshot.size,
           totalMaintenanceCost,
           isLoading: false,
         });
 
         setCardStats({
-          reportsGenerated: totalMaintenanceRecords,
+          reportsGenerated: maintenanceSnapshot.size,
           monthlyReports: monthlyCountSnapshot.data().count,
-          customReports: 0, // يمكنك تحديث هذا لاحقًا
+          customReports: 0, // This can be updated later
           scheduledReports: scheduledCountSnapshot.data().count,
         });
 
       } catch (error) {
         console.error("Error fetching all report data:", error);
-        // **تعديل: تأكد من تحديث جميع الحالات عند حدوث خطأ**
         setSummaryStats({
             totalWorkOrders: 0,
             totalMaintenanceRecords: 0,
             totalMaintenanceCost: 0,
             isLoading: false
         });
-        setReportData(initialReportData); // إعادة التعيين إلى الحالة الأولية الفارغة
+        setReportData(initialReportData);
       }
     };
     fetchAllData();
   }, []);
 
-  const handleGenerateCustomReport = (data: DocumentData[], columns: string[], dataSource: keyof ReportData) => {
+  const handleGenerateCustomReport = (data: DocumentData[], columns: string[]) => {
     if (!data || data.length === 0) {
       alert("No data available for the selected source.");
       setIsBuilderOpen(false);
       return;
     }
 
-    const maintenanceTypeReverseTranslations: { [key: string]: string } = {
-      'صيانة وقائية': 'Preventive Maintenance',
-      'صيانة تصحيحية (إصلاح)': 'Corrective Maintenance (Repair)',
-      'صيانة تنبؤية (فحص)': 'Predictive Maintenance (Inspection)',
-      'تركيب': 'Installation'
-    };
-    
-    const filteredData = data.map(row => {
-      const newRow: { [key: string]: any } = {};
-      columns.forEach(col => {
-        let value = row[col];
-        if (dataSource === 'maintenanceRecords' && col === 'maintenanceType') {
-          if (maintenanceTypeReverseTranslations[value]) {
-            value = maintenanceTypeReverseTranslations[value];
-          }
-        }
-        newRow[col] = value;
-      });
-      return newRow;
-    });
-
-    const csv = Papa.unparse(filteredData, { columns, header: true });
-    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const csv = Papa.unparse(data, { columns, header: true });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `custom_report_${new Date().toISOString().slice(0, 10)}.csv`;
@@ -184,7 +176,6 @@ export function Reports() {
     
     setIsBuilderOpen(false);
   };
-
 
   if (summaryStats.isLoading) {
     return <p>Loading reports...</p>;

@@ -53,11 +53,11 @@ export function MaintenanceCalendar() {
 
   /* فلاتر */
   const [statusFilter, setStatusFilter] = useState<'ALL' | Status>('ALL')
-  const [assetFilter,  setAssetFilter]  = useState<'ALL' | string>('ALL')
+  const [systemFilter, setSystemFilter] = useState<'ALL' | string>('ALL')
   const today = new Date().toISOString().split('T')[0]
   const [fromDate, setFromDate] = useState(today)
   const [toDate,   setToDate]   = useState(today)
-
+ const systemOptions = useMemo(() => Array.from(new Set(assets.map(a => a.name))), [assets])
   /* حوار التفاصيل + حوار WO */
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [newSlot, setNewSlot] = useState<null | { start: Date; end: Date }>(null)
@@ -98,7 +98,11 @@ export function MaintenanceCalendar() {
   const events = useMemo(() =>
     tasks
       .filter(t => (statusFilter === 'ALL' ? true : t.status === statusFilter))
-      .filter(t => (assetFilter  === 'ALL' ? true : t.assetId === assetFilter))
+      .  filter(t =>
+        systemFilter === 'ALL'
+          ? true
+          : assets.find(a => a.id === t.assetId)?.name === systemFilter
+      )
       .map(t => ({
         id: t.id,
         title: t.taskDescription,
@@ -106,7 +110,7 @@ export function MaintenanceCalendar() {
         end:   t.dueDate.toDate(),
         allDay: true,
         resource: t,
-      })), [tasks, statusFilter, assetFilter])
+       })), [tasks, statusFilter, systemFilter, assets])
 
   /* 5) لون الحدث */
   const eventPropGetter = (event: any) => ({
@@ -150,11 +154,11 @@ export function MaintenanceCalendar() {
           </select>
         </div>
         <div className="flex flex-col">
-          <label className="font-medium mb-1">Asset</label>
-          <select value={assetFilter} onChange={e => setAssetFilter(e.target.value)}
+            <label className="font-medium mb-1">System</label>
+          <select value={systemFilter} onChange={e => setSystemFilter(e.target.value)}
             className="border p-2 rounded-md min-w-[180px]">
-            <option value="ALL">All Assets</option>
-            {assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            <option value="ALL">All Systems</option>
+            {systemOptions.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
         <div className="flex flex-col">
