@@ -19,6 +19,7 @@ import {
 import { PlusCircle, Trash2 } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
 import { useToast } from '@/components/ui/use-toast';
+import { db } from '../firebase/config';
 
 // تحديث interfaces لتتوافق مع الهيكل الجديد
 interface AssetType {

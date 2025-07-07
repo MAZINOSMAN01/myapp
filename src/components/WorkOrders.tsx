@@ -9,7 +9,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore'
 import { useLocation } from 'react-router-dom'
-import { db } from '../firebase/config.js'
+import { db } from '../firebase/config';
 
 import {
   Card,

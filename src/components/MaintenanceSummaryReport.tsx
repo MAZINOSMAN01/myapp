@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 
-interface MaintenanceRecord extends DocumentData {
+// ⭐ تصدير نوع MaintenanceRecord ليتمكن ملف Reports.tsx من استيراده
+export interface MaintenanceRecord extends DocumentData {
   id: string;
   assetName: string;
   maintenanceType: string;
@@ -38,7 +39,16 @@ const MAINTENANCE_TYPE_MAP: Record<FilterType, string | null> = {
   predictive: 'Predictive Maintenance (Inspection)',
 };
 
-const getStatusColor = (status: string) => { switch (status) { case "Completed": return "bg-green-100 text-green-800"; case "Scheduled": return "bg-purple-100 text-purple-800"; case "In Progress": return "bg-blue-100 text-blue-800"; case "Pending": return "bg-yellow-100 text-yellow-800"; case "Skipped": return "bg-red-100 text-red-800"; default: return "bg-gray-100 text-gray-800"; } };
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "Completed": return "bg-green-100 text-green-800";
+    case "Scheduled": return "bg-purple-100 text-purple-800";
+    case "In Progress": return "bg-blue-100 text-blue-800";
+    case "Pending": return "bg-yellow-100 text-yellow-800";
+    case "Skipped": return "bg-red-100 text-red-800";
+    default: return "bg-gray-100 text-gray-800";
+  }
+};
 
 const statusOptions = ['all', 'Pending', 'Scheduled', 'In Progress', 'Completed', 'Skipped'];
 
@@ -85,104 +95,215 @@ export function MaintenanceSummaryReport({ data }: { data: MaintenanceRecord[] }
     return new Date(date.seconds * 1000).toLocaleDateString('en-CA');
   };
   
-  
   const handleDownloadCSV = () => {
     const recordsToDownload = filteredRecords;
     if (recordsToDownload.length === 0) {
-      toast({ title: "No Data", description: "There is no data to download for the current filter." });
+      toast({ 
+        title: "No Data", 
+        description: "There is no data to download for the current filter.",
+        variant: "destructive"
+      });
       return;
     }
 
-    const csvData = recordsToDownload.map(r => ({
-      'Asset Name': r.assetName,
-      'Maintenance Type': r.maintenanceType,
-      'Status': r.status,
-      'Cost': r.cost || 0,
-      'Date': formatDate(r.date),
+    const csvData = recordsToDownload.map(record => ({
+      'Asset Name': record.assetName,
+      'Maintenance Type': record.maintenanceType,
+      'Status': record.status,
+      'Cost': record.cost || 0,
+      'Date': formatDate(record.date),
     }));
 
-    const csv = Papa.unparse(csvData, { header: true, delimiter: ';' });
+    const csv = Papa.unparse(csvData, { header: true, delimiter: ',' });
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `maintenance_${filter}_summary.csv`;
+    link.download = `maintenance_summary_${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+
+    toast({ 
+      title: "Download Started", 
+      description: `Downloaded ${recordsToDownload.length} maintenance records.` 
+    });
   };
 
-  const handleResetFilters = () => {
-    setFilter('all');
-    setStatusFilter('all');
-    setSystemFilter('all');
-    setStartDate('');
-    setEndDate('');
+  const calculateSummary = () => {
+    const total = filteredRecords.length;
+    const completed = filteredRecords.filter(r => r.status === 'Completed').length;
+    const pending = filteredRecords.filter(r => r.status === 'Pending').length;
+    const totalCost = filteredRecords.reduce((sum, r) => sum + (r.cost || 0), 0);
+
+    return { total, completed, pending, totalCost };
   };
+
+  const summary = calculateSummary();
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center mb-4">
-          <CardTitle>Maintenance Summary</CardTitle>
-          <Button variant="outline" size="icon" onClick={handleDownloadCSV}><Download className="h-4 w-4"/></Button>
-        </div>
-        <div className="flex flex-wrap items-end gap-4 p-4 bg-muted/40 rounded-lg">
-          {/* Type Filters */}
-          <div className="flex items-center gap-2 border-r pr-4">
-            {filterOptions.map(option => (
-              <Button
-                key={option.value}
-                variant={filter === option.value ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFilter(option.value)}
-              >{option.label}</Button>
-            ))}
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Records</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{summary.total}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{summary.completed}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-600">{summary.pending}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Cost</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${summary.totalCost.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Maintenance Summary Report</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+            <div>
+              <Label htmlFor="typeFilter">Maintenance Type</Label>
+              <Select value={filter} onValueChange={(value: FilterType) => setFilter(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filterOptions.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="statusFilter">Status</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {statusOptions.map(status => (
+                    <SelectItem key={status} value={status}>
+                      {status === 'all' ? 'All Statuses' : status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="systemFilter">System</Label>
+              <Select value={systemFilter} onValueChange={setSystemFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select system" />
+                </SelectTrigger>
+                <SelectContent>
+                  {systemOptions.map(system => (
+                    <SelectItem key={system} value={system}>
+                      {system === 'all' ? 'All Systems' : system}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="startDate">Start Date</Label>
+              <Input
+                id="startDate"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="endDate">End Date</Label>
+              <Input
+                id="endDate"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
           </div>
-          {/* Status Filter */}
-          <div className="flex-grow min-w-[150px]"><Label htmlFor="status-filter" className="text-xs">Status</Label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger id="status-filter"><SelectValue placeholder="Status" /></SelectTrigger>
-              <SelectContent>{statusOptions.map(s => <SelectItem key={s} value={s}>{s === 'all' ? 'All' : s}</SelectItem>)}</SelectContent>
-            </Select>
+
+          <div className="flex justify-between items-center mb-4">
+            <p className="text-sm text-muted-foreground">
+              Showing {filteredRecords.length} of {data.length} records
+            </p>
+            <Button onClick={handleDownloadCSV} variant="outline">
+              <Download className="mr-2 h-4 w-4" />
+              Download CSV
+            </Button>
           </div>
-          {/* System Filter */}
-          <div className="flex-grow min-w-[150px]"><Label htmlFor="system-filter" className="text-xs">System</Label>
-            <Select value={systemFilter} onValueChange={setSystemFilter}><SelectTrigger id="system-filter"><SelectValue placeholder="System" /></SelectTrigger>
-              <SelectContent>{systemOptions.map(s => <SelectItem key={s} value={s}>{s === 'all' ? 'All Systems' : s}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          {/* Date Filters */}
-          <div className="flex-grow min-w-[130px]"><Label htmlFor="start-date" className="text-xs">From</Label>
-            <Input id="start-date" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-          </div>
-          <div className="flex-grow min-w-[130px]"><Label htmlFor="end-date" className="text-xs">To</Label>
-            <Input id="end-date" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
-          </div>
-          {/* Reset Button */}
-          <div>
-            <Button variant="ghost" onClick={handleResetFilters}>Reset</Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader><TableRow><TableHead>Asset Name</TableHead><TableHead>Type</TableHead><TableHead>Status</TableHead><TableHead>Cost</TableHead><TableHead>Date</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {filteredRecords.length > 0 ? (
-              filteredRecords.map(record => (
-                <TableRow key={record.id}>
-                  <TableCell className="font-medium">{record.assetName}</TableCell>
-                  <TableCell>{record.maintenanceType}</TableCell>
-                  <TableCell><Badge className={getStatusColor(record.status)}>{record.status}</Badge></TableCell>
-                  <TableCell>${(record.cost || 0).toLocaleString()}</TableCell>
-                  <TableCell>{formatDate(record.date)}</TableCell>
+
+          {/* Table */}
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Asset Name</TableHead>
+                  <TableHead>Maintenance Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Cost</TableHead>
+                  <TableHead>Date</TableHead>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow><TableCell colSpan={5} className="h-24 text-center">No records found for the selected filter.</TableCell></TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+              </TableHeader>
+              <TableBody>
+                {filteredRecords.length > 0 ? (
+                  filteredRecords.map((record) => (
+                    <TableRow key={record.id}>
+                      <TableCell className="font-medium">{record.assetName}</TableCell>
+                      <TableCell>{record.maintenanceType}</TableCell>
+                      <TableCell>
+                        <Badge className={getStatusColor(record.status)}>
+                          {record.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>${(record.cost || 0).toLocaleString()}</TableCell>
+                      <TableCell>{formatDate(record.date)}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8">
+                      No maintenance records found for the current filters.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

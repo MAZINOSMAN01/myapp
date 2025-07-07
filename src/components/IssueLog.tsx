@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc, Timestamp } from "firebase/firestore";
-import { db } from '../firebase/config.js';
+import { db } from '../firebase/config';
 import Papa from 'papaparse';
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

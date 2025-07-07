@@ -1,6 +1,8 @@
+// src/components/Dashboard.tsx
+
 import React, { useEffect, useState } from 'react';
 import { collection, getDocs, getCountFromServer, query, where, Timestamp } from "firebase/firestore";
-import { db } from '../firebase/config.js';
+import { db } from '../firebase/config'; // ⭐ إزالة .js من النهاية
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, ClipboardList, CheckCircle, AlertTriangle, ShieldCheck, Wrench } from "lucide-react";
 import { Bar, BarChart, Pie, PieChart, XAxis, YAxis, Legend, Cell, CartesianGrid, Tooltip } from 'recharts';
@@ -32,6 +34,7 @@ interface DashboardStats {
   correctiveMaintenance: number;
   isLoading: boolean;
 }
+
 interface ChartData {
   name: string;
   value: number;
@@ -66,7 +69,6 @@ const barChartConfig = {
   },
 } satisfies ChartConfig;
 
-
 export function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
@@ -86,111 +88,205 @@ export function Dashboard() {
         const workOrdersRef = collection(db, "work_orders");
         const completedQuery = query(workOrdersRef, where("status", "==", "Completed"));
         const openQuery = query(workOrdersRef, where("status", "in", ["Pending", "In Progress", "Scheduled"]));
-        const maintenanceRef = collection(db, "maintenance_records");
-        const preventiveQuery = query(maintenanceRef, where("maintenanceType", "==", "Preventive Maintenance"));
-        const correctiveQuery = query(maintenanceRef, where("maintenanceType", "==", "Corrective Maintenance (Repair)"));
-        
-        const [completedCount, openCount, allWorkOrdersSnapshot, maintenanceRecordsSnapshot, preventiveCount, correctiveCount] = await Promise.all([
-          getCountFromServer(completedQuery),
-          getCountFromServer(openQuery),
+
+        const [completedSnapshot, openSnapshot, allWorkOrdersSnapshot, maintenanceSnapshot] = await Promise.all([
+          getDocs(completedQuery),
+          getDocs(openQuery),
           getDocs(workOrdersRef),
-          getDocs(maintenanceRef),
-          getCountFromServer(preventiveQuery),
-          getCountFromServer(correctiveQuery),
+          getDocs(collection(db, "maintenance_tasks"))
         ]);
 
+        // Calculate overdue work orders
         const now = new Date();
-        const overdueCount = allWorkOrdersSnapshot.docs.reduce((count, doc) => {
+        let overdueCount = 0;
+        allWorkOrdersSnapshot.docs.forEach(doc => {
           const order = doc.data() as WorkOrder;
-          if (order.status !== 'Completed' && order.dueDate) {
-            const dueDate = order.dueDate instanceof Timestamp ? order.dueDate.toDate() : new Date(order.dueDate);
-            if (dueDate < now) {
-              return count + 1;
-            }
+          if (order.status !== "Completed" && order.dueDate) {
+            const dueDate = typeof order.dueDate === 'string' ? new Date(order.dueDate) : order.dueDate.toDate();
+            if (dueDate < now) overdueCount++;
           }
-          return count;
-        }, 0);
+        });
+
+        // Count maintenance types
+        let preventiveCount = 0;
+        let correctiveCount = 0;
+        maintenanceSnapshot.docs.forEach(doc => {
+          const task = doc.data();
+          if (task.type === 'Preventive') preventiveCount++;
+          else if (task.type === 'Corrective') correctiveCount++;
+        });
+
+        // Prepare chart data for work order statuses
+        const statusCounts: { [key: string]: number } = {
+          'Pending': 0,
+          'In Progress': 0,
+          'Completed': 0,
+          'Scheduled': 0
+        };
+
+        allWorkOrdersSnapshot.docs.forEach(doc => {
+          const order = doc.data() as WorkOrder;
+          if (statusCounts.hasOwnProperty(order.status)) {
+            statusCounts[order.status]++;
+          }
+        });
+
+        const chartData: ChartData[] = Object.entries(statusCounts).map(([status, count]) => ({
+          name: status,
+          value: count,
+          fill: pieChartConfig[status as keyof typeof pieChartConfig]?.color || '#8884d8'
+        }));
+
+        // Prepare maintenance cost data
+        const costData: MaintenanceCostData[] = [];
+        const maintenanceCosts: { [key: string]: number } = {};
+
+        maintenanceSnapshot.docs.forEach(doc => {
+          const record = doc.data() as MaintenanceRecord;
+          const mappedType = maintenanceTypeMapping[record.maintenanceType] || record.maintenanceType;
+          if (!maintenanceCosts[mappedType]) {
+            maintenanceCosts[mappedType] = 0;
+          }
+          maintenanceCosts[mappedType] += record.cost || 0;
+        });
+
+        Object.entries(maintenanceCosts).forEach(([type, cost]) => {
+          costData.push({ name: type, cost });
+        });
 
         setStats({
           totalUsers: usersSnapshot.data().count,
           workOrders: {
-            completed: completedCount.data().count,
-            open: openCount.data().count,
+            open: openSnapshot.size,
+            completed: completedSnapshot.size,
             overdue: overdueCount,
           },
-          preventiveMaintenance: preventiveCount.data().count,
-          correctiveMaintenance: correctiveCount.data().count,
+          preventiveMaintenance: preventiveCount,
+          correctiveMaintenance: correctiveCount,
           isLoading: false,
         });
 
-        const statusCounts: { [key: string]: number } = {};
-        allWorkOrdersSnapshot.docs.forEach(doc => {
-          const status = doc.data().status || 'Pending';
-          statusCounts[status] = (statusCounts[status] || 0) + 1;
-        });
-        
-        // ⭐ FIX: Process data safely for the pie chart
-        const pieData = Object.entries(statusCounts).map(([name, value]) => {
-          const configEntry = pieChartConfig[name as keyof typeof pieChartConfig];
-          return {
-            name: configEntry?.label || name,
-            value,
-            fill: configEntry?.color || "hsl(var(--chart-5))", // Provide a fallback color
-          };
-        });
-        setWorkOrderStatusData(pieData);
-
-        const costByType: { [key: string]: number } = {};
-        maintenanceRecordsSnapshot.docs.forEach(doc => {
-          const record = doc.data() as MaintenanceRecord;
-          const type = record.maintenanceType || 'Uncategorized';
-          costByType[type] = (costByType[type] || 0) + (record.cost || 0);
-        });
-        
-        const barData = Object.entries(costByType).map(([name, cost]) => ({
-          name: maintenanceTypeMapping[name] || name,
-          cost
-        }));
-        setMaintenanceCostData(barData);
+        setWorkOrderStatusData(chartData);
+        setMaintenanceCostData(costData);
 
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
         setStats(prev => ({ ...prev, isLoading: false }));
       }
     };
+
     fetchDashboardData();
   }, []);
 
   if (stats.isLoading) {
-    return <p>Loading dashboard...</p>;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-lg text-muted-foreground">Loading dashboard...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Users</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{stats.totalUsers}</div></CardContent></Card>
-        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Open Work Orders</CardTitle><ClipboardList className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{stats.workOrders.open}</div></CardContent></Card>
-        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Completed Work Orders</CardTitle><CheckCircle className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{stats.workOrders.completed}</div></CardContent></Card>
-        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Overdue Tasks</CardTitle><AlertTriangle className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold text-red-600">{stats.workOrders.overdue}</div></CardContent></Card>
-        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Preventive Maintenance</CardTitle><ShieldCheck className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{stats.preventiveMaintenance}</div></CardContent></Card>
-        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Corrective Maintenance</CardTitle><Wrench className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{stats.correctiveMaintenance}</div></CardContent></Card>
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-500">Overview of your facility management system.</p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle>Work Orders by Status</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <ChartContainer config={pieChartConfig} className="mx-auto aspect-square h-[300px]">
+            <div className="text-2xl font-bold">{stats.totalUsers}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Open Work Orders</CardTitle>
+            <ClipboardList className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.workOrders.open}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Completed Tasks</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.workOrders.completed}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Overdue Items</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{stats.workOrders.overdue}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Maintenance Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Preventive Maintenance</CardTitle>
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{stats.preventiveMaintenance}</div>
+            <p className="text-xs text-muted-foreground">Active preventive tasks</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Corrective Maintenance</CardTitle>
+            <Wrench className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{stats.correctiveMaintenance}</div>
+            <p className="text-xs text-muted-foreground">Repair tasks</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Work Order Status Distribution</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={pieChartConfig} className="h-[300px]">
               <PieChart>
-                <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
-                {/* ⭐ FIX: Use the fill property directly from the processed data */}
-                <Pie data={workOrderStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} >
-                    {workOrderStatusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
+                <Pie
+                  data={workOrderStatusData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  label
+                >
+                  {workOrderStatusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
                 </Pie>
+                <ChartTooltip content={<ChartTooltipContent />} />
                 <Legend />
               </PieChart>
             </ChartContainer>
@@ -202,15 +298,13 @@ export function Dashboard() {
             <CardTitle>Maintenance Costs by Type</CardTitle>
           </CardHeader>
           <CardContent>
-            <ChartContainer config={barChartConfig} className="aspect-auto h-[300px] w-full">
-              <BarChart data={maintenanceCostData} accessibilityLayer>
-                <CartesianGrid vertical={false} />
-                <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
+            <ChartContainer config={barChartConfig} className="h-[300px]">
+              <BarChart data={maintenanceCostData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
                 <YAxis />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Legend />
-                {/* ⭐ FIX: Use the color defined in the chart config */}
-                <Bar dataKey="cost" fill={barChartConfig.cost.color} radius={4} />
+                <Bar dataKey="cost" fill="hsl(var(--chart-1))" />
               </BarChart>
             </ChartContainer>
           </CardContent>
