@@ -1,246 +1,310 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
+// functions/src/index.ts
 
-// ─── استيرادات أساسية ─────────────────────────────────────
-import * as functions from "firebase-functions";
+// ─── استيرادات Firebase Functions v2 (المحسّنة) ─────────────────
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onDocumentUpdated, onDocumentDeleted } from "firebase-functions/v2/firestore";
+import { onRequest } from "firebase-functions/v2/https";
+import * as logger from "firebase-functions/logger";
+
+// ─── استيرادات Firebase Admin ─────────────────────────────
 import * as admin from "firebase-admin";
-import { deletePlanTasks } from "./modules/deletePlanTasks";
 
-// ─── الوحدات المساعدة الجديدة ─────────────────────────────
+// ─── الوحدات المساعدة ─────────────────────────────────────
 import { generateWeeklyTasks } from "./modules/generateWeeklyTasks";
 import { archiveTasks } from "./modules/archiveTasks";
+import { deletePlanTasks } from "./modules/deletePlanTasks";
+import { updateDashboardStats } from "./modules/updateDashboardStats";
 
-// ─── تهيئة Admin ──────────────────────────────────────────
+// ─── تهيئة Firebase Admin ──────────────────────────────────
 admin.initializeApp();
-const db = admin.firestore();
 
-/* 1) كودك الأصلي: updateDashboardStats (بدون أي تعديل) */
-export const updateDashboardStats = functions.firestore
-  .document("work_orders/{orderId}")
-  .onWrite(async (change, context) => {
-    try {
-      // Add your dashboard stats logic here
-      console.log(`Dashboard stats updated for order: ${context.params.orderId}`);
-      
-      // Example stats calculation
-      const workOrdersSnapshot = await db.collection('work_orders').get();
-      const totalOrders = workOrdersSnapshot.size;
-      
-      const pendingOrders = workOrdersSnapshot.docs.filter(
-        doc => doc.data().status === 'pending'
-      ).length;
-      
-      const completedOrders = workOrdersSnapshot.docs.filter(
-        doc => doc.data().status === 'completed'
-      ).length;
-      
-      // Update dashboard stats document
-      await db.collection('dashboard_stats').doc('summary').set({
-        totalOrders,
-        pendingOrders,
-        completedOrders,
-        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      
-    } catch (error) {
-      console.error('Error updating dashboard stats:', error);
-    }
-  });
+/* ═══════════════════════════════════════════════════════════════
+ *                    SCHEDULED FUNCTIONS
+ * ═══════════════════════════════════════════════════════════════ */
 
-/* 2) weeklyTaskGenerator — يعمل كل إثنين 00:05 UTC */
-export const weeklyTaskGenerator = functions
-  .runWith({
-    timeoutSeconds: 540, // 9 minutes - allow more time for bulk operations
-    memory: '512MB'
-  })
-  .pubsub
-  .schedule("5 0 * * 1")   // كرون: الدقيقة 5، الساعة 0 UTC، يوم الإثنين
-  .timeZone("UTC")
-  .onRun(async (context) => {
+/**
+ * يولّد مهام الصيانة الوقائية كل إثنين في تمام الساعة 00:05 UTC
+ * يعمل على إنشاء مهام جديدة للأسبوع القادم بناءً على خطط الصيانة النشطة
+ */
+export const weeklyTaskGenerator = onSchedule(
+  {
+    schedule: "5 0 * * 1", // كل إثنين في 00:05 UTC
+    timeZone: "UTC",
+    region: "us-central1",
+    memory: "512MiB",
+    timeoutSeconds: 540, // 9 دقائق للعمليات الكبيرة
+  },
+  async (event) => {
     try {
-      console.log('Starting weekly task generation...');
-      await generateWeeklyTasks(db);
-      console.log('Weekly task generation completed successfully');
-    } catch (error) {
-      console.error('Error in weekly task generation:', error);
-      throw error; // Re-throw to mark function as failed
-    }
-  });
-
-/* 2.1) onPlanDelete — Trigger عند حذف خطة الصيانة */
-export const onPlanDelete = functions.firestore
-  .document("maintenance_plans/{planId}")
-  .onDelete(async (snap, context) => {
-    try {
-      const planId = context.params.planId;
-      const planData = snap.data();
-      
-      console.log(`Plan deleted: ${planId}, cleaning up associated tasks...`);
-      
-      if (!planId) {
-        console.warn('No planId found in context');
-        return;
-      }
-      
-      await deletePlanTasks(planId);
-      
-      console.log(`Successfully cleaned up tasks for plan: ${planId}`);
-      
-      // Log the deletion for audit purposes
-      await db.collection('audit_logs').add({
-        action: 'plan_deleted',
-        planId,
-        planName: planData?.planName || 'Unknown',
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        details: `Plan "${planData?.planName || planId}" and its associated tasks were deleted`
+      logger.info("🚀 Starting weekly task generation...", { 
+        eventId: event.scheduleTime,
+        timestamp: new Date().toISOString() 
       });
       
-    } catch (error) {
-      console.error(`Error deleting tasks for plan ${context.params.planId}:`, error);
-      // Don't throw here to avoid infinite retries
-    }
-  });
-
-/* 3) autoArchiveTasks — Trigger عند تحديث كل مهمة */
-export const autoArchiveTasks = functions.firestore
-  .document("maintenance_tasks/{taskId}") // Fixed path - tasks are in root collection
-  .onUpdate(async (change, context) => {
-    try {
-      await archiveTasks(change, context);
-    } catch (error) {
-      console.error(`Error archiving task ${context.params.taskId}:`, error);
-      // Don't throw to avoid infinite retries
-    }
-  });
-
-/* 4) دالة إضافية: تنظيف المهام المكتملة القديمة */
-export const cleanupOldTasks = functions
-  .runWith({
-    timeoutSeconds: 540,
-    memory: '512MB'
-  })
-  .pubsub
-  .schedule("0 2 1 * *") // First day of every month at 2 AM UTC
-  .timeZone("UTC")
-  .onRun(async (context) => {
-    try {
-      console.log('Starting cleanup of old completed tasks...');
+      await generateWeeklyTasks();
       
-      // Delete completed tasks older than 6 months
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      logger.info("✅ Weekly task generation completed successfully");
+    } catch (error) {
+      logger.error("❌ Failed to generate weekly tasks", { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw error; // إعادة رمي الخطأ لتتبع الفشل في Cloud Console
+    }
+  }
+);
+
+/**
+ * ينظف البيانات القديمة والمهام المؤرشفة كل يوم أحد في 02:00 UTC
+ * يحذف المهام المكتملة التي مضى عليها أكثر من 90 يوماً
+ */
+export const dataCleanupScheduler = onSchedule(
+  {
+    schedule: "0 2 * * 0", // كل أحد في 02:00 UTC
+    timeZone: "UTC",
+    region: "us-central1",
+    memory: "256MiB",
+    timeoutSeconds: 300,
+  },
+  async (event) => {
+    try {
+      logger.info("🧹 Starting data cleanup...");
       
+      const db = admin.firestore();
+      const now = admin.firestore.Timestamp.now();
+      const cutoffDate = new Date(now.toDate().getTime() - (90 * 24 * 60 * 60 * 1000));
+      const cutoffTimestamp = admin.firestore.Timestamp.fromDate(cutoffDate);
+      
+      // حذف المهام المكتملة القديمة
       const oldTasksQuery = db.collection('maintenance_tasks')
-        .where('status', '==', 'completed')
-        .where('completedAt', '<', admin.firestore.Timestamp.fromDate(sixMonthsAgo));
+        .where('status', '==', 'Completed')
+        .where('completedAt', '<', cutoffTimestamp)
+        .limit(500); // معالجة دفعية لتجنب التحميل الزائد
       
       const oldTasksSnapshot = await oldTasksQuery.get();
       
-      if (oldTasksSnapshot.empty) {
-        console.log('No old completed tasks to clean up');
-        return;
-      }
-      
-      // Delete in batches
-      const batch = db.batch();
-      let count = 0;
-      
-      oldTasksSnapshot.docs.forEach(doc => {
-        if (count < 500) { // Firestore batch limit
+      if (!oldTasksSnapshot.empty) {
+        const batch = db.batch();
+        oldTasksSnapshot.docs.forEach(doc => {
           batch.delete(doc.ref);
-          count++;
-        }
-      });
+        });
+        await batch.commit();
+        
+        logger.info(`🗑️ Deleted ${oldTasksSnapshot.size} old completed tasks`);
+      }
       
-      await batch.commit();
-      
-      console.log(`Cleaned up ${count} old completed tasks`);
-      
-      // Log the cleanup
-      await db.collection('audit_logs').add({
-        action: 'cleanup_old_tasks',
-        tasksDeleted: count,
-        cutoffDate: sixMonthsAgo,
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
-      });
-      
+      logger.info("✅ Data cleanup completed successfully");
     } catch (error) {
-      console.error('Error in cleanup of old tasks:', error);
+      logger.error("❌ Failed to perform data cleanup", { error });
       throw error;
     }
-  });
+  }
+);
 
-/* 5) دالة إضافية: إرسال تذكيرات للمهام المتأخرة */
-export const sendOverdueTaskReminders = functions
-  .runWith({
-    timeoutSeconds: 300,
-    memory: '256MB'
-  })
-  .pubsub
-  .schedule("0 8 * * *") // Every day at 8 AM UTC
-  .timeZone("UTC")
-  .onRun(async (context) => {
+/* ═══════════════════════════════════════════════════════════════
+ *                    FIRESTORE TRIGGERS
+ * ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * يُحدّث إحصائيات لوحة التحكم عند تغيير حالة طلبات العمل
+ */
+export const dashboardStatsUpdater = onDocumentUpdated(
+  {
+    document: "work_orders/{orderId}",
+    region: "us-central1",
+    memory: "256MiB",
+  },
+  async (event) => {
     try {
-      console.log('Checking for overdue tasks...');
+      logger.info("📊 Updating dashboard stats...", { 
+        orderId: event.params?.orderId 
+      });
       
-      const now = admin.firestore.Timestamp.now();
-      const overdueTasksQuery = db.collection('maintenance_tasks')
-        .where('status', '==', 'pending')
-        .where('dueDate', '<', now);
+      await updateDashboardStats(event);
       
-      const overdueTasksSnapshot = await overdueTasksQuery.get();
+      logger.info("✅ Dashboard stats updated successfully");
+    } catch (error) {
+      logger.error("❌ Failed to update dashboard stats", { 
+        error,
+        orderId: event.params?.orderId 
+      });
+      // لا نرمي الخطأ هنا لأن فشل تحديث الإحصائيات لا يجب أن يؤثر على العملية الأصلية
+    }
+  }
+);
+
+/**
+ * يؤرشف المهام المكتملة تلقائياً بعد فترة محددة
+ */
+export const taskAutoArchiver = onDocumentUpdated(
+  {
+    document: "maintenance_tasks/{taskId}",
+    region: "us-central1",
+    memory: "256MiB",
+  },
+  async (event) => {
+    try {
+      const before = event.data?.before?.data();
+      const after = event.data?.after?.data();
       
-      if (overdueTasksSnapshot.empty) {
-        console.log('No overdue tasks found');
+      // تحقق من تغيير الحالة إلى مكتمل
+      if (before?.status !== 'Completed' && after?.status === 'Completed') {
+        logger.info("📋 Task completed, starting archiving process...", { 
+          taskId: event.params?.taskId 
+        });
+        
+        // ⭐ إصلاح: تمرير event فقط (متوافق مع v2)
+        await archiveTasks(event);
+        
+        logger.info("✅ Task archiving completed successfully");
+      }
+    } catch (error) {
+      logger.error("❌ Failed to archive task", { 
+        error,
+        taskId: event.params?.taskId 
+      });
+    }
+  }
+);
+
+/**
+ * ينظف المهام المرتبطة عند حذف خطة صيانة
+ */
+export const planDeletionHandler = onDocumentDeleted(
+  {
+    document: "maintenance_plans/{planId}",
+    region: "us-central1",
+    memory: "256MiB",
+  },
+  async (event) => {
+    try {
+      const planId = event.params?.planId;
+      if (!planId) {
+        logger.warn("⚠️ Plan deletion event without planId");
         return;
       }
       
-      console.log(`Found ${overdueTasksSnapshot.size} overdue tasks`);
+      logger.info("🗑️ Maintenance plan deleted, cleaning up tasks...", { planId });
       
-      // Group overdue tasks by assigned user
-      const tasksByUser: { [userId: string]: any[] } = {};
+      await deletePlanTasks(planId);
       
-      overdueTasksSnapshot.docs.forEach(doc => {
-        const task = doc.data();
-        const assignedTo = task.assignedTo;
-        
-        if (assignedTo) {
-          if (!tasksByUser[assignedTo]) {
-            tasksByUser[assignedTo] = [];
-          }
-          tasksByUser[assignedTo].push({
-            id: doc.id,
-            ...task
-          });
-        }
-      });
-      
-      // Create notifications for each user
-      const batch = db.batch();
-      
-      Object.entries(tasksByUser).forEach(([userId, tasks]) => {
-        const notificationRef = db.collection('notifications').doc();
-        batch.set(notificationRef, {
-          userId,
-          type: 'overdue_tasks',
-          title: 'Overdue Maintenance Tasks',
-          message: `You have ${tasks.length} overdue maintenance task(s)`,
-          taskCount: tasks.length,
-          tasks: tasks.map(t => ({
-            id: t.id,
-            description: t.taskDescription,
-            dueDate: t.dueDate
-          })),
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          read: false
-        });
-      });
-      
-      await batch.commit();
-      
-      console.log(`Created notifications for ${Object.keys(tasksByUser).length} users`);
-      
+      logger.info("✅ Plan cleanup completed successfully", { planId });
     } catch (error) {
-      console.error('Error sending overdue task reminders:', error);
+      logger.error("❌ Failed to cleanup deleted plan", { 
+        error,
+        planId: event.params?.planId 
+      });
       throw error;
     }
-  });
+  }
+);
+
+/* ═══════════════════════════════════════════════════════════════
+ *                    HTTP FUNCTIONS
+ * ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * نقطة نهاية لتشغيل توليد المهام يدوياً (للاختبار والطوارئ)
+ */
+export const manualTaskGeneration = onRequest(
+  {
+    region: "us-central1",
+    memory: "512MiB",
+    timeoutSeconds: 300,
+  },
+  async (req, res) => {
+    try {
+      // التحقق من صحة الطلب
+      if (req.method !== 'POST') {
+        res.status(405).json({ error: 'Method not allowed' });
+        return;
+      }
+      
+      // يمكن إضافة التحقق من الهوية هنا
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      
+      logger.info("🔧 Manual task generation requested", { 
+        userAgent: req.headers['user-agent'],
+        ip: req.ip 
+      });
+      
+      await generateWeeklyTasks();
+      
+      res.status(200).json({ 
+        success: true, 
+        message: 'Tasks generated successfully',
+        timestamp: new Date().toISOString()
+      });
+      
+      logger.info("✅ Manual task generation completed");
+    } catch (error) {
+      logger.error("❌ Manual task generation failed", { error });
+      res.status(500).json({ 
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+);
+
+/**
+ * نقطة نهاية للحصول على إحصائيات النظام
+ */
+export const systemStats = onRequest(
+  {
+    region: "us-central1",
+    memory: "256MiB",
+  },
+  async (req, res) => {
+    try {
+      if (req.method !== 'GET') {
+        res.status(405).json({ error: 'Method not allowed' });
+        return;
+      }
+      
+      const db = admin.firestore();
+      
+      // جمع الإحصائيات
+      const [
+        tasksSnapshot,
+        plansSnapshot,
+        workOrdersSnapshot,
+        usersSnapshot
+      ] = await Promise.all([
+        db.collection('maintenance_tasks').count().get(),
+        db.collection('maintenance_plans').count().get(),
+        db.collection('work_orders').count().get(),
+        db.collection('users').count().get()
+      ]);
+      
+      const stats = {
+        totalTasks: tasksSnapshot.data().count,
+        totalPlans: plansSnapshot.data().count,
+        totalWorkOrders: workOrdersSnapshot.data().count,
+        totalUsers: usersSnapshot.data().count,
+        timestamp: new Date().toISOString(),
+        region: "us-central1"
+      };
+      
+      res.status(200).json(stats);
+      
+    } catch (error) {
+      logger.error("❌ Failed to get system stats", { error });
+      res.status(500).json({ 
+        error: 'Failed to retrieve stats',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+);
+
+/* ═══════════════════════════════════════════════════════════════
+ *                    UTILITY EXPORTS
+ * ═══════════════════════════════════════════════════════════════ */
+
+// تصدير الوحدات للاختبار والاستخدام المباشر
+export { generateWeeklyTasks, archiveTasks, deletePlanTasks, updateDashboardStats };
