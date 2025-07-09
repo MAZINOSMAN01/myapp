@@ -1,5 +1,5 @@
 // src/components/AppSidebar.tsx
-// نسخة محدثة تتضمن رابط "Database Migration" مع صلاحيات الأدوار وميزة التنقّل الآلي
+// نسخة مُعادة إلى الشكل الأصلي مع تبسيط منطق التنقل
 // -----------------------------------------------------------------------------
 
 import {
@@ -19,7 +19,7 @@ import {
   Lightbulb,
   Car,
   Archive,
-  Database, // ← إضافة Database icon
+  Database,
 } from "lucide-react";
 import {
   Sidebar,
@@ -38,105 +38,68 @@ interface AppSidebarProps {
   setActiveSection: (section: string) => void;
 }
 
-// ─── تعريف عناصر القائمة مصنّفة في مجموعات ───────────────────────
+// ─── تعريف عناصر القائمة (بدون خاصية path) ───────────────────────
 
 const menuGroups = [
   {
     title: "Main",
     items: [
-      { title: "Dashboard", icon: LayoutDashboard, id: "dashboard", path: "/dashboard" },
+      { title: "Dashboard", icon: LayoutDashboard, id: "dashboard" },
     ],
   },
   {
     title: "Operations",
     items: [
-      { title: "Work Orders", icon: Wrench, id: "work-orders", path: "/work-orders" },
-      { title: "Maintenance", icon: Settings, id: "maintenance", path: "/maintenance-management" },
-      { title: "Cleaning Management", icon: Sparkles, id: "cleaning", path: "/cleaning" },
+      { title: "Work Orders", icon: Wrench, id: "work-orders" },
+      { title: "Maintenance", icon: Settings, id: "maintenance" },
+      { title: "Cleaning Management", icon: Sparkles, id: "cleaning" },
     ],
   },
   {
     title: "Assets & Spaces",
     items: [
-      { title: "Asset Management", icon: Package2, id: "assets", path: "/assets" },
-      { title: "Space Management", icon: MapPin, id: "spaces", path: "/spaces" },
+      { title: "Asset Management", icon: Package2, id: "assets" },
+      { title: "Space Management", icon: MapPin, id: "spaces" },
     ],
   },
   {
     title: "Quality & Safety",
     items: [
-      { title: "MOTs", icon: Car, id: "mots", path: "/mots" },
-      { title: "Issue Log", icon: ClipboardList, id: "issue-log", path: "/issue-log" },
-      { title: "Lessons Learned", icon: Lightbulb, id: "lessons-learned", path: "/lessons-learned" },
+      { title: "MOTs", icon: Car, id: "mots" },
+      { title: "Issue Log", icon: ClipboardList, id: "issue-log" },
+      { title: "Lessons Learned", icon: Lightbulb, id: "lessons-learned" },
     ],
   },
   {
     title: "Finance",
     items: [
-      { title: "Quotations & Invoicing", icon: DollarSign, id: "quotations", path: "/quotations" },
+      { title: "Quotations & Invoicing", icon: DollarSign, id: "quotations" },
     ],
   },
   {
     title: "Administration",
     items: [
-      { title: "User Management", icon: Users, id: "users", path: "/user-management" },
-      { title: "Reports", icon: FileText, id: "reports", path: "/reports" },
-      {
-        title: "Archive Reports",
-        icon: Archive,
-        id: "archive-reports",
-        path: "/archive-reports",
-      },
-      // ─── إضافة رابط Database Migration (مشروط حسب متغير البيئة) ───
-      {
-        title: "Database Migration",
-        icon: Database,
-        id: "database-migration",
-        path: "/database-migration",
-      }
+      { title: "User Management", icon: Users, id: "users" },
+      { title: "Reports", icon: FileText, id: "reports" },
+      { title: "Archive Reports", icon: Archive, id: "archive-reports" },
+      { title: "Database Migration", icon: Database, id: "database-migration" },
     ],
   },
 ];
 
-// ─── صلاحيات الأدوار لاختيار بنود القائمة ─────────────────────────
+// ─── صلاحيات الأدوار (تبقى كما هي) ─────────────────────────
 
 const rolePermissions: { [key: string]: string[] } = {
   "High Manager": [
-    "dashboard",
-    "spaces",
-    "assets",
-    "work-orders",
-    "cleaning",
-    "maintenance",
-    "quotations",
-    "issue-log",
-    "lessons-learned",
-    "mots",
-    "users",
-    "reports",
-    "archive-reports",
-     "database-migration"
-    // إضافة مشروطة لـ Database Migration
-    
+    "dashboard", "spaces", "assets", "work-orders", "cleaning", "maintenance", 
+    "quotations", "issue-log", "lessons-learned", "mots", "users", "reports", 
+    "archive-reports", "database-migration"
   ],
-  Engineer: [
-    "dashboard",
-    "work-orders",
-    "maintenance",
-    "assets",
-    "reports",
-    "issue-log",
-    "lessons-learned",
-    "archive-reports",
-     "database-migration"
-    // إضافة مشروطة للمهندسين أيضاً
-    
+  "Engineer": [
+    "dashboard", "work-orders", "maintenance", "assets", "reports", 
+    "issue-log", "lessons-learned", "archive-reports", "database-migration"
   ],
-  Technician: [
-    "dashboard",
-    "work-orders",
-    "maintenance",
-  ],
+  "Technician": ["dashboard", "work-orders", "maintenance"],
 };
 
 // ─── المكوّن الرئيسي لشريط الجانب ────────────────────────────────
@@ -192,11 +155,9 @@ export function AppSidebar({ activeSection, setActiveSection }: AppSidebarProps)
                 <SidebarMenu className="mt-2">
                   {filteredItems.map((item) => (
                     <SidebarMenuItem key={item.id}>
+                      {/* ✨ التصحيح: تم تبسيط دالة النقر هنا */}
                       <SidebarMenuButton
-                        onClick={() => {
-                          setActiveSection(item.id);
-                          if (item.path) navigate(item.path);
-                        }}
+                        onClick={() => setActiveSection(item.id)}
                         isActive={activeSection === item.id}
                         className="w-full"
                       >

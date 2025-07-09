@@ -34,8 +34,10 @@ const Index = () => {
     switch (section) {
       case 'dashboard': path = '/dashboard'; break;
       case 'spaces': path = '/space-management'; break;
-      case 'assets': path = '/asset-tracking'; break;
+     // في src/pages/Index.tsx - تصحيح المسار
+
       case 'work-orders': path = '/work-orders'; break;
+      case 'assets': path = '/assets'; break;  // كان /asset-tracking
       case 'cleaning': path = '/cleaning-management'; break;
       case 'maintenance': path = '/maintenance-management'; break;
       case 'quotations': path = '/quotations-invoicing'; break;
