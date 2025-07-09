@@ -31,7 +31,7 @@ import { SpaceManagement } from './components/SpaceManagement';
 import { CleaningManagement } from './components/CleaningManagement';
 import { QuotationsInvoicing } from './components/QuotationsInvoicing';
 import { ArchiveReports } from './components/ArchiveReports';
-
+import MaintenanceChecklistPage from './pages/MaintenanceChecklistPage';
 
 const queryClient = new QueryClient();
 
@@ -63,7 +63,8 @@ function AppRoutes() {
           <Route path="assets" element={<AssetManagement />} /> 
           <Route path="work-orders" element={<WorkOrders />} />
           <Route path="cleaning-management" element={<CleaningManagement />} />
-          <Route path="maintenance-management" element={<MaintenancePage />} /> 
+          <Route path="maintenance-management" element={<MaintenancePage />} />
+          <Route path="maintenance-management/checklist/:planId" element={<MaintenanceChecklistPage />} />
           <Route path="quotations-invoicing" element={<QuotationsInvoicing />} />
           <Route path="issue-log" element={<IssueLog />} />
           <Route path="lessons-learned" element={<LessonsLearned />} />

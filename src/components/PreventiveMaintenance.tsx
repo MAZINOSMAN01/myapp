@@ -1,5 +1,7 @@
 // src/components/PreventiveMaintenance.tsx
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+
 import { db } from '@/firebase/config';
 import {
   collection,
@@ -11,16 +13,9 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+
 import { CreateMaintenancePlan } from './CreateMaintenancePlan';
-import { MaintenanceChecklist } from './MaintenanceChecklist';
+
 import {
   Card,
   CardContent,
@@ -38,49 +33,26 @@ import {
 } from '@/components/ui/select';
 import { ShieldCheck, Eye, Edit, Trash2, MapPin } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import type {
+  Assets,
+  MaintenancePlan as BaseMaintenancePlan,
+} from '@/types/maintenance';
+
 
 /* ------------------------------------------------------------------ */
-/*  الأنـــواع ــ> متطابقة مع CreateMaintenancePlan.tsx               */
+//*  الأنـــواع ــ> مستوردة من واجهات البيانات الموحدة                  */
 /* ------------------------------------------------------------------ */
-type Frequency =
-  | 'Daily'
-  | 'Weekly'
-  | 'Monthly'
-  | 'Quarterly'
-  | 'Semi-annually'
-  | 'Annually';
-
-interface AssetType {
-  name: string;
-  location?: string;
-}
-
-interface Asset {
-  id: string;
-  name: string;
-  types: AssetType[];
-}
-
-interface MaintenancePlan {
-  /** الحقول المطلوبة فى النموذج */
-  id: string;
-  assetId: string;
-  planName: string;
-  frequency: Frequency;
-  firstDueDate: Timestamp;
-  tasks: string[];
-
-  /** حقول إضافيّة نستخدمها محلياً */
-  assetName: string;
-  location?: string;
-  assignedTo?: string;
-  completed?: boolean;
+interface MaintenancePlan extends BaseMaintenancePlan {
+  /** اسم النظام المعروض */
+  assetName: string
+  /** الموقع النصي إن وُجد */
+  location?: string
 }
 /* ------------------------------------------------------------------ */
 
 export function PreventiveMaintenance() {
   /* ----------------------- الحالة ----------------------- */
-  const [assets, setAssets]               = useState<Asset[]>([]);
+  const [assets, setAssets]               = useState<Assets[]>([]);
   const [plans, setPlans]                 = useState<MaintenancePlan[]>([]);
   const [filterSystem, setFilterSystem]   = useState<string>('all');
   const [showCompleted, setShowCompleted] = useState<boolean>(false);
@@ -99,8 +71,10 @@ export function PreventiveMaintenance() {
         return {
           id: d.id,
           name: raw.name,
+            spaceId: raw.spaceId ?? '',
+          location: raw.location,
           types: raw.types || [],
-        } as Asset;
+        } as Assets;
       });
       setAssets(list);
     });
@@ -234,31 +208,12 @@ export function PreventiveMaintenance() {
 
                 <CardFooter className="flex justify-between pt-3">
                   {/* عرض الـChecklist */}
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="gap-1">
-                        <Eye className="h-4 w-4" />
-                        View Checklist
-                      </Button>
-                    </DialogTrigger>
-
-                    <DialogContent className="sm:max-w-[800px]">
-                      <DialogHeader>
-                        <DialogTitle>{plan.planName}</DialogTitle>
-                        <DialogDescription className="flex items-center gap-1">
-                          {plan.assetName} — {plan.frequency}
-                          {plan.firstDueDate && (
-                            <>
-                              — Starts{' '}
-                              {plan.firstDueDate.toDate().toLocaleDateString()}
-                            </>
-                          )}
-                        </DialogDescription>
-                      </DialogHeader>
-
-                      <MaintenanceChecklist plan={plan} />
-                    </DialogContent>
-                  </Dialog>
+                   <Button asChild variant="outline" size="sm" className="gap-1">
+                    <Link to={`/maintenance-management/checklist/${plan.id}`}> 
+                      <Eye className="h-4 w-4" />
+                      View Checklist
+                    </Link>
+                  </Button>
 
                   {/* أزرار التعديل/الحذف */}
                   <div className="flex gap-2">

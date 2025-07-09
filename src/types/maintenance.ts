@@ -26,6 +26,12 @@ import type { Timestamp } from 'firebase/firestore'
 /** الحمولة التى تُنشأ قبل الحفظ فى Firestore */
 export interface NewMaintenancePlan {
   assetId: string
+  /** نوع الأصل ضمن النظام (اختياري) */
+  assetType?: string
+  /** الموقع النصي المعروض لهذا الأصل */
+  location?: string
+  /** معرّف المساحة المرتبطة إن وجد */
+  spaceId?: string
   planName: string
   frequency: Frequency
   firstDueDate: Timestamp        // يحفظ كـ Timestamp فى Firestore
@@ -36,7 +42,7 @@ export interface NewMaintenancePlan {
 /** خطة صيانة محفوظة بالفعل */
 export interface MaintenancePlan extends NewMaintenancePlan {
   id: string
-  location?: string              // يُملأ تلقائياً أو يحدّده المستخدم
+            // يُملأ تلقائياً أو يحدّده المستخدم
   completed?: boolean
 }
 
@@ -61,4 +67,4 @@ export interface SystemAsset {
 }
 
 /** اسم مستعار لتوافق المكوّنات القديمة التى تستورد `Asset` */
-export type Asset = SystemAsset
+export type Assets = SystemAsset

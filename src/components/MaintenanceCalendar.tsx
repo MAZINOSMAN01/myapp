@@ -54,9 +54,11 @@ export function MaintenanceCalendar() {
   /* فلاتر */
   const [statusFilter, setStatusFilter] = useState<'ALL' | Status>('ALL')
   const [systemFilter, setSystemFilter] = useState<'ALL' | string>('ALL')
-  const today = new Date().toISOString().split('T')[0]
-  const [fromDate, setFromDate] = useState(today)
-  const [toDate,   setToDate]   = useState(today)
+  const startOfMonth = new Date()
+  startOfMonth.setDate(1)
+  const endOfMonth = new Date(startOfMonth.getFullYear(), startOfMonth.getMonth() + 1, 0)
+  const [fromDate, setFromDate] = useState(startOfMonth.toISOString().split('T')[0])
+  const [toDate,   setToDate]   = useState(endOfMonth.toISOString().split('T')[0])
  const systemOptions = useMemo(() => Array.from(new Set(assets.map(a => a.name))), [assets])
   /* حوار التفاصيل + حوار WO */
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
