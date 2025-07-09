@@ -48,6 +48,7 @@ export interface MaintenancePlan extends NewMaintenancePlan {
 export interface AssetType {
   name: string
   location?: string
+  spaceId?: string
 }
 
 /** نظام (Asset) يضمّ مجموعة أنواع */
@@ -55,6 +56,7 @@ export interface SystemAsset {
   id: string
   name: string
   location?: string              // موقع افتراضى للنظام ككلّ (اختياري)
+  spaceId?: string
   types: AssetType[]
 }
 

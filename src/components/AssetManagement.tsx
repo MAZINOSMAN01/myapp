@@ -59,6 +59,7 @@ import { Plus, Edit, Trash2, ChevronsUpDown } from 'lucide-react'
 
 /* ---------- الأنواع الموحدة + حوار تعديل الموقع ---------- */
 import type { SystemAsset, AssetType } from '@/types/maintenance'
+import type { SpaceLocation } from '@/types/space-management'
 import { EditAssetDialog } from '@/components/EditAssetDialog'
 
 /* alias محلّى ليبقى الاسم Asset فى الكود */
@@ -114,6 +115,7 @@ const Combobox = ({
 export function AssetManagement() {
   /* ---------------- الحالة ---------------- */
   const [assets, setAssets] = useState<Asset[]>([])
+  const [spaces, setSpaces] = useState<SpaceLocation[]>([])
   const [filterSystem, setFilterSystem] = useState('all')
   const [filterType, setFilterType] = useState('')
 
@@ -127,6 +129,7 @@ export function AssetManagement() {
   const [assetName, setAssetName] = useState('')
   const [assetType, setAssetType] = useState('')
   const [assetLocation, setAssetLocation] = useState('')
+  const [assetLocationId, setAssetLocationId] = useState('')
 
   const { toast } = useToast()
 
@@ -139,6 +142,8 @@ export function AssetManagement() {
         return {
           id: d.id,
           name: data.name,
+          location: data.location,
+          spaceId: data.spaceId,
           types: (data.types || []) as AssetType[],
         } as Asset
       })
@@ -149,8 +154,16 @@ export function AssetManagement() {
     }
   }
   useEffect(() => {
-   loadAssets()
- }, [])
+    loadAssets()
+    getDocs(collection(db, 'space_locations'))
+      .then((snap) => {
+        setSpaces(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as SpaceLocation[])
+      })
+      .catch((e) => {
+        console.error(e)
+        toast({ title: 'Error', description: 'Failed loading spaces.', variant: 'destructive' })
+      })
+  }, [])
 
   /* ------------- فتح الحوارات ------------- */
   const openAddAsset = () => {
@@ -160,6 +173,7 @@ export function AssetManagement() {
     setAssetName('')
     setAssetType('')
     setAssetLocation('')
+    setAssetLocationId('')
     setIsDialogOpen(true)
   }
 
@@ -170,6 +184,7 @@ export function AssetManagement() {
     setAssetName(asset.name)
     setAssetType(t.name)
     setAssetLocation(t.location ?? '')
+    setAssetLocationId(t.spaceId ?? '')
     setIsDialogOpen(true)
   }
 
@@ -180,6 +195,7 @@ export function AssetManagement() {
     setAssetName(asset.name)
     setAssetType('')
     setAssetLocation('')
+    setAssetLocationId('')
     setIsDialogOpen(true)
   }
 
@@ -188,6 +204,7 @@ export function AssetManagement() {
     const name = assetName.trim()
     const type = assetType.trim()
     const location = assetLocation.trim()
+    const spaceId = assetLocationId.trim()
 
     if (!name || !type) {
       alert('System name and type are required.')
@@ -198,7 +215,7 @@ export function AssetManagement() {
       /* تعديل نوع */
       if (dialogMode === 'editType' && editingAsset && editingType) {
         const newTypes = editingAsset.types.map((t) =>
-          t.name === editingType.name ? { name: type, location } : t,
+          t.name === editingType.name ? { name: type, location, spaceId } : t,
         )
         await updateDoc(doc(db, 'assets', editingAsset.id), { name, types: newTypes })
         toast({ description: 'Type updated.' })
@@ -211,7 +228,7 @@ export function AssetManagement() {
           return
         }
         await updateDoc(doc(db, 'assets', editingAsset.id), {
-          types: [...editingAsset.types, { name: type, location }],
+          types: [...editingAsset.types, { name: type, location, spaceId }],
         })
         toast({ description: 'Type added.' })
       }
@@ -225,13 +242,13 @@ export function AssetManagement() {
             return
           }
           await updateDoc(doc(db, 'assets', existing.id), {
-            types: [...existing.types, { name: type, location }],
+            types: [...existing.types, { name: type, location, spaceId }],
           })
           toast({ description: 'Type added to existing system.' })
         } else {
           await addDoc(collection(db, 'assets'), {
             name,
-            types: [{ name: type, location }],
+            types: [{ name: type, location, spaceId }],
           })
           toast({ description: 'New system created.' })
         }
@@ -281,10 +298,8 @@ export function AssetManagement() {
 
   const systemOptions = useMemo(() => Array.from(new Set(assets.map((a) => a.name))), [assets])
   const locationOptions = useMemo(() => {
-    const s = new Set<string>()
-    assets.forEach((a) => a.types.forEach((t) => t.location && s.add(t.location)))
-    return Array.from(s)
-  }, [assets])
+    return Array.from(new Set(spaces.map((s) => s.displayName))).sort()
+  }, [spaces])
 
   /* ------------- الواجهة ------------- */
   return (
@@ -355,7 +370,11 @@ export function AssetManagement() {
               <Combobox
                 options={locationOptions}
                 value={assetLocation}
-                onSelect={setAssetLocation}
+                onSelect={(val) => {
+                  setAssetLocation(val)
+                  const found = spaces.find((s) => s.displayName === val)
+                  setAssetLocationId(found ? found.id : '')
+                }}
                 placeholder="Select or add a location…"
               />
             </div>

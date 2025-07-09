@@ -23,7 +23,8 @@ import {
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
-import type { Asset, LocationDoc } from '@/types/maintenance'
+import type { Asset } from '@/types/maintenance'
+import type { SpaceLocation } from '@/types/space-management'
 import { Pencil } from 'lucide-react'
 
 interface Props {
@@ -32,23 +33,28 @@ interface Props {
 
 export function EditAssetDialog({ asset }: Props) {
   const { toast } = useToast()
-  const [locations, setLocations] = useState<LocationDoc[]>([])
-  const [selected, setSelected] = useState<string>(
-   asset.location ?? asset.types[0]?.location ?? ''
- )
+  const [locations, setLocations] = useState<SpaceLocation[]>([])
+  const [selected, setSelected] = useState<string>(asset.spaceId ?? '')
 
-  /** تحميل جميع المواقع */
+  /** تحميل جميع المواقع من إدارة المساحات */
   useEffect(() => {
-    getDocs(collection(db, 'locations')).then((snap) => {
-      setLocations(
-        snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
-      )
-    })
+    getDocs(collection(db, 'space_locations'))
+      .then((snap) => {
+        setLocations(
+          snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as SpaceLocation[]
+        )
+      })
+      .catch((err) => {
+        console.error(err)
+        toast({ title: 'Error', description: 'Failed loading spaces.', variant: 'destructive' })
+      })
   }, [])
 
   const handleSave = async () => {
+    const selectedSpace = locations.find((l) => l.id === selected)
     await updateDoc(doc(db, 'assets', asset.id), {
-      location: selected,
+      location: selectedSpace?.displayName ?? '',
+      spaceId: selected || undefined,
     })
     toast({
       description: 'Asset location updated.',
@@ -77,7 +83,7 @@ export function EditAssetDialog({ asset }: Props) {
             <SelectContent>
               {locations.map((loc) => (
                 <SelectItem key={loc.id} value={loc.id}>
-                  {loc.name}
+                  {loc.displayName}
                 </SelectItem>
               ))}
             </SelectContent>

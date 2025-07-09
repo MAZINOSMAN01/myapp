@@ -160,6 +160,31 @@ export function SpaceManagement() {
     cleaningFrequency: 'Daily' as 'Daily' | 'Weekly' | 'Monthly',
   });
 
+  // Derived option lists from existing spaces and defaults
+  const buildingsList = useMemo(() => {
+    const set = new Set<string>(BUILDINGS)
+    spaces.forEach((s) => set.add(s.structure.building))
+    return Array.from(set)
+  }, [spaces])
+
+  const floorsList = useMemo(() => {
+    const set = new Set<number>(FLOORS)
+    spaces.forEach((s) => set.add(s.structure.floor))
+    return Array.from(set).sort((a, b) => a - b)
+  }, [spaces])
+
+  const labelsList = useMemo(() => {
+    const set = new Set<string>(LABELS)
+    spaces.forEach((s) => s.structure.label && set.add(s.structure.label))
+    return Array.from(set)
+  }, [spaces])
+
+  const spaceTypesList = useMemo(() => {
+    const set = new Set<SpaceType>(SPACE_TYPES)
+    spaces.forEach((s) => set.add(s.spaceType))
+    return Array.from(set)
+  }, [spaces])
+
   // Load Spaces
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -531,40 +556,33 @@ export function SpaceManagement() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Building</Label>
-                    <Select
+                    <Input
+                      list="building-options"
                       value={formData.building}
-                      onValueChange={(value) => setFormData({ ...formData, building: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Building" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {BUILDINGS.map((building) => (
-                          <SelectItem key={building} value={building}>
-                            {building}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onChange={(e) => setFormData({ ...formData, building: e.target.value })}
+                      placeholder="Enter building"
+                    />
+                    <datalist id="building-options">
+                      {buildingsList.map((building) => (
+                        <option key={building} value={building} />
+                      ))}
+                    </datalist>
                   </div>
 
                   <div>
                     <Label>Floor</Label>
-                    <Select
-                      value={formData.floor.toString()}
-                      onValueChange={(value) => setFormData({ ...formData, floor: parseInt(value) })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Floor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {FLOORS.map((floor) => (
-                          <SelectItem key={floor} value={floor.toString()}>
-                            Floor {floor}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      type="number"
+                      list="floor-options"
+                      value={formData.floor}
+                      onChange={(e) => setFormData({ ...formData, floor: parseInt(e.target.value) || 0 })}
+                      placeholder="Enter floor"
+                    />
+                    <datalist id="floor-options">
+                      {floorsList.map((floor) => (
+                        <option key={floor} value={floor} />
+                      ))}
+                    </datalist>
                   </div>
                 </div>
 
@@ -581,42 +599,34 @@ export function SpaceManagement() {
 
                   <div>
                     <Label>Label</Label>
-                    <Select
+                    <Input
+                      list="label-options"
                       value={formData.label}
-                      onValueChange={(value) => setFormData({ ...formData, label: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Label" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {LABELS.map((label) => (
-                          <SelectItem key={label} value={label}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onChange={(e) => setFormData({ ...formData, label: e.target.value })}
+                      placeholder="Enter label"
+                    />
+                    <datalist id="label-options">
+                      {labelsList.map((label) => (
+                        <option key={label} value={label} />
+                      ))}
+                    </datalist>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Space Type</Label>
-                    <Select
+                    <Input
+                      list="type-options"
                       value={formData.spaceType}
-                      onValueChange={(value) => setFormData({ ...formData, spaceType: value as SpaceType })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SPACE_TYPES.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {type}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onChange={(e) => setFormData({ ...formData, spaceType: e.target.value as SpaceType })}
+                      placeholder="Enter space type"
+                    />
+                    <datalist id="type-options">
+                      {spaceTypesList.map((type) => (
+                        <option key={type} value={type} />
+                      ))}
+                    </datalist>
                   </div>
 
                   <div>
@@ -771,7 +781,7 @@ export function SpaceManagement() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Buildings</SelectItem>
-                    {BUILDINGS.map((building) => (
+                    {buildingsList.map((building) => (
                       <SelectItem key={building} value={building}>
                         {building}
                       </SelectItem>
@@ -788,7 +798,7 @@ export function SpaceManagement() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Floors</SelectItem>
-                    {FLOORS.map((floor) => (
+                    {floorsList.map((floor) => (
                       <SelectItem key={floor} value={floor.toString()}>
                         Floor {floor}
                       </SelectItem>
@@ -805,7 +815,7 @@ export function SpaceManagement() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Types</SelectItem>
-                    {SPACE_TYPES.map((type) => (
+                    {spaceTypesList.map((type) => (
                       <SelectItem key={type} value={type}>
                         {type}
                       </SelectItem>
