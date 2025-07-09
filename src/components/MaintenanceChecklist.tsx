@@ -2,16 +2,18 @@
 // نسخة مُحسَّنة تجمع الخصائص المتقدمة مع استقرار الإصدار القديم
 
 import React, { useState, useEffect, useRef } from 'react';
-import { db } from '@/firebase/config';
+import { useParams, Link } from 'react-router-dom'
 import {
   collection,
   doc,
+  getDoc, 
   onSnapshot,
   query,
   Timestamp,
   updateDoc,
   where,
-} from 'firebase/firestore';
+} from 'firebase/firestore'
+import { db } from '@/firebase/config'
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -103,7 +105,8 @@ export interface AdvancedMaintenanceTask {
 }
 
 interface Props {
-  plan: MaintenancePlan;
+   /** Optional plan object; if not provided, planId will be read from route */
+  plan?: MaintenancePlan
 }
 
 /*───────────────────────────────────────────
@@ -291,14 +294,26 @@ const TaskStatusBadge: React.FC<{ status: TaskStatus }> = ({ status }) => {
  * 2) المكوّن الرئيسي
  *──────────────────────────────────────────*/
 
-export function MaintenanceChecklist({ plan }: Props) {
-  const [tasks, setTasks] = useState<AdvancedMaintenanceTask[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [periodNotes, setPeriodNotes] = useState('');
-  const [selectedTask, setSelectedTask] = useState<AdvancedMaintenanceTask | null>(null);
-  const [showTaskDetails, setShowTaskDetails] = useState(false);
-  const [newNote, setNewNote] = useState('');
-  const { toast } = useToast();
+export function MaintenanceChecklist({ plan: initialPlan }: Props) {
+  const { planId } = useParams<{ planId?: string }>()
+
+  const [plan, setPlan] = useState<MaintenancePlan | null>(initialPlan ?? null)
+  const [tasks, setTasks] = useState<AdvancedMaintenanceTask[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [periodNotes, setPeriodNotes] = useState('')
+  const [selectedTask, setSelectedTask] = useState<AdvancedMaintenanceTask | null>(null)
+  const [showTaskDetails, setShowTaskDetails] = useState(false)
+  const [newNote, setNewNote] = useState('')
+  const { toast } = useToast()
+
+  /* جلب الخطة إذا لم تمرر كمُعطى */
+  useEffect(() => {
+    if (initialPlan || !planId) return
+    getDoc(doc(db, 'maintenance_plans', planId)).then(d => {
+      if (d.exists()) setPlan({ id: d.id, ...(d.data() as any) } as MaintenancePlan)
+    })
+  }, [initialPlan, planId])
+
 
   /*──────────────────── 2.1 جلب البيانات */
   useEffect(() => {
@@ -473,17 +488,25 @@ export function MaintenanceChecklist({ plan }: Props) {
   const progress = tasks.length ? Math.round((tasks.filter((t) => t.status === 'Completed').length / tasks.length) * 100) : 0;
 
   /*──────────────────── 3) واجهة المستخدم */
-  if (isLoading)
+  if (!plan || isLoading)
     return (
-      <div className="flex-center h-full">
+      <div className="flex-center h-full p-4">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         <span className="ml-2">Loading…</span>
       </div>
     );
-
+const isPage = !!planId && !initialPlan;
   return (
-    <div className="space-y-6 h-full flex flex-col">
-      {/* شريط التقدم العام */}
+    <div className={`${isPage ? 'container mx-auto py-6' : ''} space-y-6 h-full flex flex-col`}>
+      {isPage && (
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">{plan.planName}</h1>
+          <Button asChild variant="outline">
+            <Link to="/maintenance-management">Back</Link>
+          </Button>
+        </div>
+      )}
+      {/* شريط التقدم العام */
       <Card>
         <CardHeader className="pb-3">
           <div className="flex justify-between items-center">
@@ -504,7 +527,9 @@ export function MaintenanceChecklist({ plan }: Props) {
         </CardContent>
       </Card>
 
-      {/* جدول المهام */}
+
+
+        /* جدول المهام */}
       <div className="border rounded-lg overflow-auto flex-grow">
         <Table>
           <TableHeader>
@@ -670,3 +695,4 @@ export function MaintenanceChecklist({ plan }: Props) {
     </div>
   );
 }
+export default MaintenanceChecklist;

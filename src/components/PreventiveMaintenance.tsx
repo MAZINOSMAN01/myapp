@@ -71,7 +71,7 @@ export function PreventiveMaintenance() {
         return {
           id: d.id,
           name: raw.name,
-            spaceId: raw.spaceId ?? '',
+          spaceId: raw.spaceId ?? '',
           location: raw.location,
           types: raw.types || [],
         } as Assets;
