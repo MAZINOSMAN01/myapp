@@ -17,52 +17,29 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { PlusCircle, Trash2 } from "lucide-react";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, collection, getDocs } from "firebase/firestore";
+import { db } from "@/firebase/config";
+import type { SpaceLocation } from "@/types/space-management";
+import {
+  type Asset,
+  type AssetType,
+  type NewMaintenancePlan,
+  type MaintenancePlan,
+  type Frequency,
+} from "@/types/maintenance";
 import { useToast } from "@/components/ui/use-toast";
 
 /*───────────────────────────────────────────────────────────────
  * Interfaces & Types
  *──────────────────────────────────────────────────────────────*/
-interface AssetType {
-  name: string;
-  location?: string;
-}
 
-interface Asset {
-  id: string;
-  /** System name, e.g. "HVAC" */
-  name: string;
-  /** Optional nested types; kept for backward‑compat */
-  types?: AssetType[];
-  /** Primary location; authoritative */
-  location?: string;
-}
 
 interface User {
   id: string;
   name: string;
 }
 
-type Frequency =
-  | "Daily"
-  | "Weekly"
-  | "Monthly"
-  | "Quarterly"
-  | "Semi-annually"
-  | "Annually";
 
-export interface NewMaintenancePlan {
-  assetId: string;
-  planName: string;
-  frequency: Frequency;
-  firstDueDate: Timestamp;
-  tasks: string[];
-  assignedTo?: string;
-}
-
-interface MaintenancePlan extends NewMaintenancePlan {
-  id: string;
-}
 
 export interface CreateMaintenancePlanProps {
   isOpen: boolean;
@@ -90,6 +67,10 @@ export function CreateMaintenancePlan({
   const { toast } = useToast();
   const [selectedSystem, setSelectedSystem] = useState<string>("");
   const [assetId, setAssetId] = useState<string>("");
+  const [selectedType, setSelectedType] = useState<string>("");
+  const [location, setLocation] = useState<string>("");
+  const [spaceId, setSpaceId] = useState<string>("");
+  const [spaces, setSpaces] = useState<SpaceLocation[]>([]);
   const [planName, setPlanName] = useState<string>("");
   const [frequency, setFrequency] = useState<Frequency>("Weekly");
   const [firstDue, setFirstDue] = useState<string>("");
@@ -104,37 +85,54 @@ export function CreateMaintenancePlan({
     [assets]
   );
 
-  const availableAssets = useMemo(() => {
-    if (!selectedSystem) return [] as Asset[];
-    return assets.filter((a) => a.name === selectedSystem);
+  const availableTypes = useMemo(() => {
+    if (!selectedSystem) return [] as { assetId: string; type: AssetType }[];
+    return assets
+      .filter((a) => a.name === selectedSystem)
+      .flatMap((a) =>
+        (a.types || []).map((t) => ({ assetId: a.id, type: t }))
+      );
   }, [selectedSystem, assets]);
 
-  const selectedAsset = useMemo(
-    () => availableAssets.find((a) => a.id === assetId),
-    [availableAssets, assetId]
-  );
-
-  const assetLocation = useMemo(() => {
-    if (!selectedAsset) return "";
-    // 1) Prefer asset.location field
-    if (selectedAsset.location?.trim()) return selectedAsset.location.trim();
-    // 2) Fallback to first type with location
-    const locFromType = selectedAsset.types?.find((t) => t.location)?.location;
-    return locFromType ?? "";
-  }, [selectedAsset]);
-
+   const locationOptions = useMemo(() => {
+    const fromAssets = assets.flatMap((a) => [
+      a.location,
+      ...(a.types?.map((t) => t.location).filter(Boolean) as string[] || [])
+    ]);
+    const fromSpaces = spaces.map((s) => s.displayName);
+    return Array.from(new Set([...fromAssets, ...fromSpaces].filter(Boolean))).sort();
+  }, [assets, spaces]);
   /*───────────────────────────
    * Helpers
    *──────────────────────────*/
   const resetForm = useCallback(() => {
     setSelectedSystem("");
     setAssetId("");
+    setSelectedType("");
+    setLocation("");
+    setSpaceId("");
     setPlanName("");
     setFrequency("Weekly");
     setFirstDue("");
     setTasks([""]);
     setAssignedTo("unassigned");
   }, []);
+  /*───────────────────────────
+   * Load spaces for location selection
+   *──────────────────────────*/
+  useEffect(() => {
+    getDocs(collection(db, 'space_locations'))
+      .then((snap) => {
+        setSpaces(
+          snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as SpaceLocation[]
+        );
+      })
+      .catch((err) => {
+        console.error(err);
+        toast({ title: 'Error', description: 'Failed loading spaces.', variant: 'destructive' });
+      });
+  }, [toast]);
+
 
   /*───────────────────────────
    * Populate when editing
@@ -147,12 +145,17 @@ export function CreateMaintenancePlan({
     const asset = assets.find((a) => a.id === editingPlan.assetId);
     setSelectedSystem(asset?.name ?? "");
     setAssetId(editingPlan.assetId);
+      setSelectedType((editingPlan as any).assetType ?? "");
+    const loc = (editingPlan as any).location ?? asset?.location ?? "";
+    setLocation(loc);
+    const spaceMatch = spaces.find((s) => s.displayName === loc);
+    setSpaceId(spaceMatch ? spaceMatch.id : (editingPlan as any).spaceId ?? "");
     setPlanName(editingPlan.planName);
     setFrequency(editingPlan.frequency);
     setFirstDue(editingPlan.firstDueDate.toDate().toISOString().slice(0, 10));
     setTasks([...editingPlan.tasks]);
     setAssignedTo(editingPlan.assignedTo ?? "unassigned");
-  }, [editingPlan, assets, resetForm]);
+  }, [editingPlan, assets, spaces, resetForm]);
 
   /*───────────────────────────
    * Save handler
@@ -177,7 +180,11 @@ export function CreateMaintenancePlan({
     }
     const newPlan: NewMaintenancePlan = {
       assetId,
+      assetType: selectedType || undefined,
+      location: location || undefined,
+      spaceId: spaceId || undefined,
       planName,
+    
       frequency,
       firstDueDate: Timestamp.fromDate(new Date(firstDue)),
       tasks: cleanedTasks,
@@ -226,18 +233,33 @@ export function CreateMaintenancePlan({
             </Select>
           </div>
 
-          {/* Asset */}
+           {/* Asset Type */}
           {selectedSystem && (
             <div>
-              <Label>Asset</Label>
-              <Select value={assetId} onValueChange={(v) => setAssetId(v)}>
+              <Label>Asset Type</Label>
+              <Select
+                value={selectedType ? `${assetId}|${selectedType}` : ""}
+                onValueChange={(val) => {
+                  const [id, typeName] = val.split("|");
+                  setAssetId(id);
+                  setSelectedType(typeName);
+                  const asset = assets.find((a) => a.id === id);
+                  const t = asset?.types?.find((t) => t.name === typeName);
+                  const loc = t?.location || asset?.location || "";
+                  setLocation(loc);
+                  const match = spaces.find((s) =>
+                    t?.spaceId ? s.id === t.spaceId : s.displayName === loc
+                  );
+                  setSpaceId(match ? match.id : t?.spaceId || "");
+                }}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select an asset…" />
+                  <SelectValue placeholder="Select an asset type…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableAssets.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.id} — {a.location ?? a.types?.find((t) => t.location)?.location ?? "No location"}
+                   {availableTypes.map((opt, idx) => (
+                    <SelectItem key={`${opt.assetId}-${idx}`} value={`${opt.assetId}|${opt.type.name}`}> 
+                      {opt.type.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -245,11 +267,25 @@ export function CreateMaintenancePlan({
             </div>
           )}
 
-          {/* Location (read‑only) */}
-          {assetId && (
+           {/* Location */}
+          {(selectedType || locationOptions.length) && (
             <div>
               <Label>Location</Label>
-              <Input value={assetLocation} readOnly className="bg-muted/50 cursor-not-allowed" />
+              <Input
+                list="pm-location-options"
+                value={location}
+                onChange={(e) => {
+                  setLocation(e.target.value);
+                  const match = spaces.find((s) => s.displayName === e.target.value);
+                  setSpaceId(match ? match.id : "");
+                }}
+                placeholder="Select or type location"
+              />
+              <datalist id="pm-location-options">
+                {locationOptions.map((loc) => (
+                  <option key={loc} value={loc} />
+                ))}
+              </datalist>
             </div>
           )}
 
