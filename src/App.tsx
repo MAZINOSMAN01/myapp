@@ -60,8 +60,7 @@ function AppRoutes() {
           <Route path="space-management" element={<SpaceManagement />} />
 
           {/* --- هنا تم التعديل --- */}
-          <Route path="asset-tracking" element={<AssetManagement />} /> 
-
+          <Route path="assets" element={<AssetManagement />} /> 
           <Route path="work-orders" element={<WorkOrders />} />
           <Route path="cleaning-management" element={<CleaningManagement />} />
           <Route path="maintenance-management" element={<MaintenancePage />} /> 

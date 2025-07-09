@@ -1,5 +1,5 @@
 // src/components/AppSidebar.tsx
-// نسخة محدثة تتضمن رابط "Archive Reports" مع صلاحيات الأدوار وميزة التنقّل الآلي
+// نسخة محدثة تتضمن رابط "Database Migration" مع صلاحيات الأدوار وميزة التنقّل الآلي
 // -----------------------------------------------------------------------------
 
 import {
@@ -19,6 +19,7 @@ import {
   Lightbulb,
   Car,
   Archive,
+  Database, // ← إضافة Database icon
 } from "lucide-react";
 import {
   Sidebar,
@@ -50,7 +51,7 @@ const menuGroups = [
     title: "Operations",
     items: [
       { title: "Work Orders", icon: Wrench, id: "work-orders", path: "/work-orders" },
-      { title: "Maintenance", icon: Settings, id: "maintenance", path: "/maintenance" },
+      { title: "Maintenance", icon: Settings, id: "maintenance", path: "/maintenance-management" },
       { title: "Cleaning Management", icon: Sparkles, id: "cleaning", path: "/cleaning" },
     ],
   },
@@ -78,15 +79,21 @@ const menuGroups = [
   {
     title: "Administration",
     items: [
-      { title: "User Management", icon: Users, id: "users", path: "/users" },
+      { title: "User Management", icon: Users, id: "users", path: "/user-management" },
       { title: "Reports", icon: FileText, id: "reports", path: "/reports" },
-      // ─── العنصر الجديد لتقارير الأرشيف ──────────────────────────
       {
         title: "Archive Reports",
         icon: Archive,
         id: "archive-reports",
         path: "/archive-reports",
       },
+      // ─── إضافة رابط Database Migration (مشروط حسب متغير البيئة) ───
+      {
+        title: "Database Migration",
+        icon: Database,
+        id: "database-migration",
+        path: "/database-migration",
+      }
     ],
   },
 ];
@@ -107,7 +114,10 @@ const rolePermissions: { [key: string]: string[] } = {
     "mots",
     "users",
     "reports",
-    "archive-reports", // ✨ أُضيفت
+    "archive-reports",
+     "database-migration"
+    // إضافة مشروطة لـ Database Migration
+    
   ],
   Engineer: [
     "dashboard",
@@ -117,7 +127,10 @@ const rolePermissions: { [key: string]: string[] } = {
     "reports",
     "issue-log",
     "lessons-learned",
-    "archive-reports", // ✨ أُضيفت
+    "archive-reports",
+     "database-migration"
+    // إضافة مشروطة للمهندسين أيضاً
+    
   ],
   Technician: [
     "dashboard",

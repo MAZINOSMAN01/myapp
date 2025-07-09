@@ -14,7 +14,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { PlusCircle, SlidersHorizontal, ShieldCheck, Wrench, RefreshCw } from 'lucide-react';
 import { CreateMaintenancePlan } from './CreateMaintenancePlan';
-import type { Asset, NewMaintenancePlan } from './PreventiveMaintenance';
+import type { Asset, NewMaintenancePlan } from '@/types/maintenance'
+
 // --- Data Interfaces ---
 interface MaintenanceTask {
     id: string;

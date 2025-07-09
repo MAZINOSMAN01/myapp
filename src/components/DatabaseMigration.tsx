@@ -2,7 +2,7 @@
 // مكون مؤقت لتحديث البيانات الموجودة - يُستخدم مرة واحدة فقط
 
 import React, { useState } from 'react';
-import { collection, getDocs, updateDoc, doc, writeBatch, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, writeBatch, Timestamp, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,20 +57,16 @@ export function DatabaseMigration() {
           updates.priority = 'Medium';
         }
 
-        if (!data.estimatedDuration) {
-          updates.estimatedDuration = null;
+        if (!data.cost) {
+          updates.cost = 0;
         }
 
-        if (!data.actualDuration) {
-          updates.actualDuration = null;
+        if (!data.assignedTo) {
+          updates.assignedTo = '';
         }
 
-        if (!data.completedBy) {
-          updates.completedBy = null;
-        }
-
-        if (!data.notes) {
-          updates.notes = '';
+        if (!data.assetName) {
+          updates.assetName = '';
         }
 
         if (Object.keys(updates).length > 0) {
@@ -105,26 +101,30 @@ export function DatabaseMigration() {
         const updates: any = {};
 
         // إضافة تاريخ الإكمال
-        if (data.status === 'Completed' && !data.completedAt) {
-          updates.completedAt = data.updatedAt || data.dueDate || Timestamp.now();
+        if (['Completed', 'Closed'].includes(data.status) && !data.completedAt) {
+          updates.completedAt = data.updatedAt || Timestamp.now();
         }
 
         // إضافة تاريخ الإغلاق
-        if (['Closed', 'Cancelled'].includes(data.status) && !data.closedAt) {
+        if (data.status === 'Closed' && !data.closedAt) {
           updates.closedAt = data.updatedAt || Timestamp.now();
         }
 
         // إضافة حقول مفقودة
+        if (!data.cost) {
+          updates.cost = 0;
+        }
+
+        if (!data.assignedTo) {
+          updates.assignedTo = '';
+        }
+
+        if (!data.assetName) {
+          updates.assetName = '';
+        }
+
         if (!data.completedBy) {
-          updates.completedBy = null;
-        }
-
-        if (!data.actualCost) {
-          updates.actualCost = data.estimatedCost || 0;
-        }
-
-        if (!data.resolution) {
-          updates.resolution = '';
+          updates.completedBy = '';
         }
 
         if (Object.keys(updates).length > 0) {
@@ -199,36 +199,23 @@ export function DatabaseMigration() {
     setCurrentStep('إنشاء مجموعات النظام...');
     
     try {
-      // إنشاء مجموعة إحصائيات النظام
+      // إنشاء مجموعة إحصائيات النظام (بدلاً من تحديث)
       const systemStatsRef = doc(db, 'system_stats', 'general');
-      await updateDoc(systemStatsRef, {
+      await setDoc(systemStatsRef, {
         lastMigration: Timestamp.now(),
         version: '2.0.0',
-        features: ['archive_reports', 'advanced_search', 'auto_archiving']
-      }).catch(async () => {
-        // إذا لم يكن المستند موجوداً، أنشئه
-        await updateDoc(systemStatsRef, {
-          lastMigration: Timestamp.now(),
-          version: '2.0.0',
-          features: ['archive_reports', 'advanced_search', 'auto_archiving'],
-          createdAt: Timestamp.now()
-        });
+        features: ['archive_reports', 'advanced_search', 'auto_archiving'],
+        createdAt: Timestamp.now()
       });
 
       addResult('✅ تم إنشاء مجموعة إحصائيات النظام');
 
-      // إنشاء مجموعة التقارير المولدة
+      // إنشاء مجموعة التقارير المولدة (بدلاً من تحديث)
       const reportsRef = doc(db, 'generated_reports', 'sample');
-      await updateDoc(reportsRef, {
+      await setDoc(reportsRef, {
         type: 'sample',
         createdAt: Timestamp.now(),
         description: 'Sample document to initialize collection'
-      }).catch(async () => {
-        await updateDoc(reportsRef, {
-          type: 'sample',
-          createdAt: Timestamp.now(),
-          description: 'Sample document to initialize collection'
-        });
       });
 
       addResult('✅ تم إنشاء مجموعة التقارير المولدة');
