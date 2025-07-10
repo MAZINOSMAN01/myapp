@@ -15,6 +15,19 @@ interface MaintenancePlan {
   lastGenerated?: admin.firestore.Timestamp;
 }
 
+interface MaintenanceTask {
+  planId: string;
+  assetId: string;
+  taskDescription: string;
+  dueDate: admin.firestore.Timestamp;
+  status: string;
+  priority: string;
+  assignedTo?: string;
+  createdAt: admin.firestore.Timestamp;
+  planName: string;
+  frequency: string;
+}
+
 /**
  * توليد مهام الصيانة الوقائية للأسبوع القادم
  */
@@ -84,34 +97,29 @@ export async function generateWeeklyTasks(): Promise<void> {
             }
             
             // إنشاء مهمة جديدة
-            const taskRef = db.collection("maintenance_tasks").doc();
-            const taskData = {
+            const newTask: MaintenanceTask = {
               planId: plan.id,
               assetId: plan.assetId,
               taskDescription,
-              type: "Preventive",
-              status: "Pending",
               dueDate: admin.firestore.Timestamp.fromDate(dueDate),
-              assignedTo: plan.assignedTo || null,
-              createdAt: admin.firestore.FieldValue.serverTimestamp(),
-              createdBy: "system_scheduler",
-              priority: "Medium",
-              estimatedDuration: null,
-              actualDuration: null,
-              cost: null,
-              notes: "",
-              completedAt: null,
-              completedBy: null
+              status: "Pending",
+              priority: getPriorityBasedOnFrequency(plan.frequency),
+              assignedTo: plan.assignedTo || "",
+              createdAt: admin.firestore.Timestamp.now(),
+              planName: plan.planName,
+              frequency: plan.frequency
             };
             
-            batch.set(taskRef, taskData);
+            const taskRef = db.collection("maintenance_tasks").doc();
+            batch.set(taskRef, newTask);
             totalTasksGenerated++;
           }
         }
         
-        // تحديث تاريخ آخر توليد للخطة
-        batch.update(planDoc.ref, {
-          lastGenerated: admin.firestore.FieldValue.serverTimestamp()
+        // تحديث lastGenerated للخطة
+        const planRef = db.collection("maintenance_plans").doc(plan.id);
+        batch.update(planRef, {
+          lastGenerated: admin.firestore.Timestamp.now()
         });
         
       } catch (planError) {
@@ -119,30 +127,19 @@ export async function generateWeeklyTasks(): Promise<void> {
           error: planError instanceof Error ? planError.message : String(planError),
           planId: plan.id
         });
-        // الاستمرار مع الخطط الأخرى
       }
     }
     
-    // تنفيذ العمليات
+    // تنفيذ جميع العمليات
     if (totalTasksGenerated > 0) {
       await batch.commit();
-      logger.info(`✅ Successfully generated ${totalTasksGenerated} tasks for next week`);
-      
-      // تحديث إحصائيات التوليد
-      await db.collection("system_stats").doc("task_generation").set({
-        lastRun: admin.firestore.FieldValue.serverTimestamp(),
-        tasksGenerated: totalTasksGenerated,
-        plansProcessed: plansSnapshot.size,
-        weekStart: admin.firestore.Timestamp.fromDate(nextWeekStart),
-        weekEnd: admin.firestore.Timestamp.fromDate(nextWeekEnd)
-      }, { merge: true });
-      
+      logger.info(`✅ Successfully generated ${totalTasksGenerated} new tasks`);
     } else {
       logger.info("ℹ️ No new tasks needed for next week");
     }
     
   } catch (error) {
-    logger.error("❌ Fatal error in weekly task generation", {
+    logger.error("❌ Failed to generate weekly tasks", {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined
     });
@@ -151,7 +148,7 @@ export async function generateWeeklyTasks(): Promise<void> {
 }
 
 /**
- * حساب تواريخ الاستحقاق للخطة في فترة معينة
+ * حساب التواريخ المطلوبة لخطة محددة خلال فترة زمنية
  */
 function calculateDueDatesForPlan(
   plan: MaintenancePlan, 
@@ -165,54 +162,57 @@ function calculateDueDatesForPlan(
   }
   
   const firstDue = plan.firstDueDate.toDate();
-  let currentDate = new Date(firstDue);
+  const frequencyInDays = getFrequencyInDays(plan.frequency);
   
-  // التأكد من أن التاريخ الحالي في المستقبل
-  const now = new Date();
-  while (currentDate <= now) {
-    currentDate = getNextDueDate(currentDate, plan.frequency);
+  if (frequencyInDays === 0) {
+    return dueDates;
   }
   
-  // جمع جميع التواريخ في الفترة المطلوبة
+  // البحث عن التواريخ المطلوبة في النطاق المحدد
+  let currentDate = new Date(firstDue);
+  
+  // التأكد من البدء من تاريخ مناسب
+  while (currentDate < startDate) {
+    currentDate.setDate(currentDate.getDate() + frequencyInDays);
+  }
+  
+  // إضافة التواريخ المطلوبة
   while (currentDate < endDate) {
-    if (currentDate >= startDate) {
-      dueDates.push(new Date(currentDate));
-    }
-    currentDate = getNextDueDate(currentDate, plan.frequency);
+    dueDates.push(new Date(currentDate));
+    currentDate.setDate(currentDate.getDate() + frequencyInDays);
   }
   
   return dueDates;
 }
 
 /**
- * حساب التاريخ التالي بناءً على التكرار
+ * تحويل تكرار الصيانة إلى عدد أيام
  */
-function getNextDueDate(currentDate: Date, frequency: string): Date {
-  const nextDate = new Date(currentDate);
+function getFrequencyInDays(frequency: string): number {
+  const frequencyMap: Record<string, number> = {
+    'Daily': 1,
+    'Weekly': 7,
+    'Monthly': 30,
+    'Quarterly': 90,
+    'Semi-annually': 180,
+    'Annually': 365
+  };
   
-  switch (frequency) {
-    case 'Daily':
-      nextDate.setDate(nextDate.getDate() + 1);
-      break;
-    case 'Weekly':
-      nextDate.setDate(nextDate.getDate() + 7);
-      break;
-    case 'Monthly':
-      nextDate.setMonth(nextDate.getMonth() + 1);
-      break;
-    case 'Quarterly':
-      nextDate.setMonth(nextDate.getMonth() + 3);
-      break;
-    case 'Semi-annually':
-      nextDate.setMonth(nextDate.getMonth() + 6);
-      break;
-    case 'Annually':
-      nextDate.setFullYear(nextDate.getFullYear() + 1);
-      break;
-    default:
-      logger.warn(`⚠️ Unknown frequency: ${frequency}, defaulting to weekly`);
-      nextDate.setDate(nextDate.getDate() + 7);
-  }
+  return frequencyMap[frequency] || 0;
+}
+
+/**
+ * تحديد الأولوية بناءً على تكرار الصيانة
+ */
+function getPriorityBasedOnFrequency(frequency: string): string {
+  const priorityMap: Record<string, string> = {
+    'Daily': 'High',
+    'Weekly': 'High',
+    'Monthly': 'Medium',
+    'Quarterly': 'Medium',
+    'Semi-annually': 'Low',
+    'Annually': 'Low'
+  };
   
-  return nextDate;
+  return priorityMap[frequency] || 'Medium';
 }

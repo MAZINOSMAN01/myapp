@@ -1,21 +1,23 @@
 {
   "compilerOptions": {
-    /* إعداداتك الأصلية */
-    "module": "NodeNext",
-    "moduleResolution": "nodenext",
-    "target": "es2017",
+    "module": "commonjs",
+    "noImplicitReturns": true,
+    "noUnusedLocals": false,
     "outDir": "lib",
     "sourceMap": true,
-    "esModuleInterop": true,
     "strict": true,
-    "noImplicitReturns": true,
-    "noUnusedLocals": true,
-
-    /* إضافات لحل الأخطاء */
-    "skipLibCheck": true,   // يتجاهل أخطاء تعريفات node_modules
-    "allowJs": true         // يسمح بملفات .js إذا وُجدت داخل src
+    "target": "es2018",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node"
   },
-
   "compileOnSave": true,
-  "include": ["src"]
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules",
+    "lib"
+  ]
 }

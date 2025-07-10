@@ -1,6 +1,6 @@
 // functions/src/index.ts
 
-// ─── استيرادات Firebase Functions v2 (المحسّنة) ─────────────────
+// ─── استيرادات Firebase Functions v2 ─────────────────
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentUpdated, onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { onRequest } from "firebase-functions/v2/https";
@@ -24,7 +24,6 @@ admin.initializeApp();
 
 /**
  * يولّد مهام الصيانة الوقائية كل إثنين في تمام الساعة 00:05 UTC
- * يعمل على إنشاء مهام جديدة للأسبوع القادم بناءً على خطط الصيانة النشطة
  */
 export const weeklyTaskGenerator = onSchedule(
   {
@@ -32,7 +31,7 @@ export const weeklyTaskGenerator = onSchedule(
     timeZone: "UTC",
     region: "us-central1",
     memory: "512MiB",
-    timeoutSeconds: 540, // 9 دقائق للعمليات الكبيرة
+    timeoutSeconds: 540,
   },
   async (event) => {
     try {
@@ -49,54 +48,51 @@ export const weeklyTaskGenerator = onSchedule(
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined
       });
-      throw error; // إعادة رمي الخطأ لتتبع الفشل في Cloud Console
+      throw error;
     }
   }
 );
 
 /**
- * ينظف البيانات القديمة والمهام المؤرشفة كل يوم أحد في 02:00 UTC
- * يحذف المهام المكتملة التي مضى عليها أكثر من 90 يوماً
+ * ينظف المهام المنتهية الصلاحية كل يوم في الساعة 02:00 UTC
  */
 export const dataCleanupScheduler = onSchedule(
   {
-    schedule: "0 2 * * 0", // كل أحد في 02:00 UTC
+    schedule: "0 2 * * *", // كل يوم في 02:00 UTC
     timeZone: "UTC",
     region: "us-central1",
     memory: "256MiB",
     timeoutSeconds: 300,
   },
-  async (event) => {
+  async () => {
     try {
       logger.info("🧹 Starting data cleanup...");
       
       const db = admin.firestore();
       const now = admin.firestore.Timestamp.now();
-      const cutoffDate = new Date(now.toDate().getTime() - (90 * 24 * 60 * 60 * 1000));
-      const cutoffTimestamp = admin.firestore.Timestamp.fromDate(cutoffDate);
+      const cutoffDate = admin.firestore.Timestamp.fromDate(
+        new Date(now.toDate().getTime() - (14 * 24 * 60 * 60 * 1000)) // 14 يوم مضى
+      );
       
-      // حذف المهام المكتملة القديمة
-      const oldTasksQuery = db.collection('maintenance_tasks')
-        .where('status', '==', 'Completed')
-        .where('completedAt', '<', cutoffTimestamp)
-        .limit(500); // معالجة دفعية لتجنب التحميل الزائد
+      // حذف المهام المؤرشفة القديمة
+      const oldTasksQuery = await db.collection("maintenance_tasks")
+        .where("archived", "==", true)
+        .where("archivedAt", "<", cutoffDate)
+        .limit(100)
+        .get();
       
-      const oldTasksSnapshot = await oldTasksQuery.get();
-      
-      if (!oldTasksSnapshot.empty) {
+      if (!oldTasksQuery.empty) {
         const batch = db.batch();
-        oldTasksSnapshot.docs.forEach(doc => {
+        oldTasksQuery.docs.forEach(doc => {
           batch.delete(doc.ref);
         });
         await batch.commit();
-        
-        logger.info(`🗑️ Deleted ${oldTasksSnapshot.size} old completed tasks`);
+        logger.info(`🗑️ Cleaned up ${oldTasksQuery.size} old archived tasks`);
       }
       
       logger.info("✅ Data cleanup completed successfully");
     } catch (error) {
-      logger.error("❌ Failed to perform data cleanup", { error });
-      throw error;
+      logger.error("❌ Failed to cleanup data", { error });
     }
   }
 );
@@ -106,7 +102,7 @@ export const dataCleanupScheduler = onSchedule(
  * ═══════════════════════════════════════════════════════════════ */
 
 /**
- * يُحدّث إحصائيات لوحة التحكم عند تغيير حالة طلبات العمل
+ * يحدث إحصائيات لوحة التحكم عند تغيير أوامر العمل
  */
 export const dashboardStatsUpdater = onDocumentUpdated(
   {
@@ -128,13 +124,12 @@ export const dashboardStatsUpdater = onDocumentUpdated(
         error,
         orderId: event.params?.orderId 
       });
-      // لا نرمي الخطأ هنا لأن فشل تحديث الإحصائيات لا يجب أن يؤثر على العملية الأصلية
     }
   }
 );
 
 /**
- * يؤرشف المهام المكتملة تلقائياً بعد فترة محددة
+ * يؤرشف المهام المكتملة تلقائياً
  */
 export const taskAutoArchiver = onDocumentUpdated(
   {
@@ -153,7 +148,6 @@ export const taskAutoArchiver = onDocumentUpdated(
           taskId: event.params?.taskId 
         });
         
-        // ⭐ إصلاح: تمرير event فقط (متوافق مع v2)
         await archiveTasks(event);
         
         logger.info("✅ Task archiving completed successfully");
@@ -204,7 +198,7 @@ export const planDeletionHandler = onDocumentDeleted(
  * ═══════════════════════════════════════════════════════════════ */
 
 /**
- * نقطة نهاية لتشغيل توليد المهام يدوياً (للاختبار والطوارئ)
+ * نقطة نهاية لتشغيل توليد المهام يدوياً
  */
 export const manualTaskGeneration = onRequest(
   {
@@ -217,13 +211,6 @@ export const manualTaskGeneration = onRequest(
       // التحقق من صحة الطلب
       if (req.method !== 'POST') {
         res.status(405).json({ error: 'Method not allowed' });
-        return;
-      }
-      
-      // يمكن إضافة التحقق من الهوية هنا
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).json({ error: 'Unauthorized' });
         return;
       }
       
@@ -245,166 +232,75 @@ export const manualTaskGeneration = onRequest(
       logger.error("❌ Manual task generation failed", { error });
       res.status(500).json({ 
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : String(error)
       });
     }
   }
 );
 
 /**
- * نقطة نهاية لتوليد تقارير الأرشيف (للبيانات التاريخية)
+ * نقطة نهاية للحصول على إحصائيات النظام
  */
-export const generateArchiveReport = onRequest(
+export const getSystemStats = onRequest(
   {
     region: "us-central1",
-    memory: "1GiB", // ذاكرة أكبر للتعامل مع كميات كبيرة من البيانات
-    timeoutSeconds: 540, // 9 دقائق للتقارير الكبيرة
+    memory: "256MiB",
+    timeoutSeconds: 60,
   },
   async (req, res) => {
     try {
-      if (req.method !== 'POST') {
+      if (req.method !== 'GET') {
         res.status(405).json({ error: 'Method not allowed' });
         return;
       }
-
-      // التحقق من الهوية
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).json({ error: 'Unauthorized' });
-        return;
-      }
-
-      const {
-        reportType = 'maintenance',
-        dateFrom,
-        dateTo,
-        status = 'all',
-        includeFinancials = true,
-        format = 'json',
-        requestedBy = 'unknown'
-      } = req.body;
-
-      logger.info("📊 Archive report generation requested", {
-        reportType,
-        dateRange: `${dateFrom} to ${dateTo}`,
-        requestedBy,
-        userAgent: req.headers['user-agent']
-      });
-
-      // استيراد الوحدة محلياً لتجنب مشاكل التبعيات
-      const { generateArchiveReport: generateReport, convertToCSV } = 
-        await import('./modules/archiveReportsGenerator.js');
-
-      const reportData = await generateReport({
-        reportType,
-        dateFrom,
-        dateTo,
-        status,
-        includeFinancials,
-        format,
-        requestedBy
-      });
-
-      if (!reportData.success) {
-        res.status(500).json({
-          error: 'Report generation failed',
-          details: reportData.error
-        });
-        return;
-      }
-
-      // إرسال الاستجابة حسب التنسيق المطلوب
-      if (format === 'csv') {
-        const csvContent = convertToCSV(reportData.data || []);
-        
-        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-        res.setHeader(
-          'Content-Disposition', 
-          `attachment; filename="archive_report_${reportType}_${new Date().toISOString().split('T')[0]}.csv"`
-        );
-        res.status(200).send('\uFEFF' + csvContent); // BOM للعربية
-      } else {
-        res.status(200).json({
-          success: true,
-          recordCount: reportData.recordCount,
-          generatedAt: reportData.generatedAt,
-          data: reportData.data,
-          message: `تم توليد تقرير يحتوي على ${reportData.recordCount} سجل بنجاح`
-        });
-      }
-
-      logger.info("✅ Archive report generated successfully", {
-        recordCount: reportData.recordCount,
-        format,
-        requestedBy
-      });
-
+      
+      const db = admin.firestore();
+      
+      // إحصائيات المهام
+      const tasksSnapshot = await db.collection("maintenance_tasks").get();
+      const completedTasks = tasksSnapshot.docs.filter(doc => 
+        doc.data().status === 'Completed'
+      ).length;
+      
+      // إحصائيات خطط الصيانة
+      const plansSnapshot = await db.collection("maintenance_plans").get();
+      const activePlans = plansSnapshot.docs.filter(doc => 
+        doc.data().isActive !== false
+      ).length;
+      
+      // إحصائيات أوامر العمل
+      const workOrdersSnapshot = await db.collection("work_orders").get();
+      const openWorkOrders = workOrdersSnapshot.docs.filter(doc => 
+        ['Open', 'Pending', 'In Progress'].includes(doc.data().status)
+      ).length;
+      
+      const stats = {
+        totalTasks: tasksSnapshot.size,
+        completedTasks,
+        pendingTasks: tasksSnapshot.size - completedTasks,
+        totalPlans: plansSnapshot.size,
+        activePlans,
+        inactivePlans: plansSnapshot.size - activePlans,
+        totalWorkOrders: workOrdersSnapshot.size,
+        openWorkOrders,
+        completedWorkOrders: workOrdersSnapshot.size - openWorkOrders,
+        timestamp: new Date().toISOString()
+      };
+      
+      res.status(200).json(stats);
+      
     } catch (error) {
-      logger.error("❌ Archive report generation failed", { error });
-      res.status(500).json({
+      logger.error("❌ Failed to get system stats", { error });
+      res.status(500).json({ 
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : String(error)
       });
     }
   }
 );
 
-/**
- * نقطة نهاية للبحث المتقدم في الأرشيف
- */
-export const advancedArchiveSearch = onRequest(
-  {
-    region: "us-central1",
-    memory: "512MiB",
-    timeoutSeconds: 300,
-  },
-  async (req, res) => {
-    try {
-      if (req.method !== 'POST') {
-        res.status(405).json({ error: 'Method not allowed' });
-        return;
-      }
-
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).json({ error: 'Unauthorized' });
-        return;
-      }
-
-      const searchParams = req.body;
-
-      logger.info("🔍 Advanced archive search requested", { searchParams });
-
-      const { advancedArchiveSearch: performSearch } = 
-       await import('./modules/archiveReportsGenerator.js');
-
-      const results = await performSearch(searchParams);
-
-      res.status(200).json({
-        success: true,
-        recordCount: results.length,
-        data: results,
-        searchParams,
-        generatedAt: new Date().toISOString()
-      });
-
-      logger.info("✅ Advanced archive search completed", {
-        recordCount: results.length
-      });
-
-    } catch (error) {
-      logger.error("❌ Advanced archive search failed", { error });
-      res.status(500).json({
-        error: 'Search failed',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  }
-);
-
-/* ═══════════════════════════════════════════════════════════════
- *                    UTILITY EXPORTS
- * ═══════════════════════════════════════════════════════════════ */
-
-// تصدير الوحدات للاختبار والاستخدام المباشر
-export { generateWeeklyTasks, archiveTasks, deletePlanTasks, updateDashboardStats };
+// إعادة تصدير الوحدات للاستخدام الخارجي
+export { generateWeeklyTasks } from "./modules/generateWeeklyTasks";
+export { archiveTasks } from "./modules/archiveTasks";
+export { deletePlanTasks } from "./modules/deletePlanTasks";
+export { updateDashboardStats } from "./modules/updateDashboardStats";

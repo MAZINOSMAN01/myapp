@@ -61,19 +61,19 @@ async function generateArchiveReport(request) {
         // ─── جمع البيانات حسب الأنواع المطلوبة ─────────────────────
         if (request.reportType === "all" || request.reportType === "maintenance") {
             const maintenanceData = await fetchMaintenanceArchive(db, request);
-            allData.push(...maintenanceData.map((d) => (Object.assign(Object.assign({}, d), { type: "maintenance" }))));
+            allData.push(...maintenanceData.map((d) => ({ ...d, type: "maintenance" })));
         }
         if (request.reportType === "all" || request.reportType === "work_orders") {
             const workData = await fetchWorkOrdersArchive(db, request);
-            allData.push(...workData.map((d) => (Object.assign(Object.assign({}, d), { type: "work_order" }))));
+            allData.push(...workData.map((d) => ({ ...d, type: "work_order" })));
         }
         if (request.reportType === "all" || request.reportType === "issues") {
             const issueData = await fetchIssuesArchive(db, request);
-            allData.push(...issueData.map((d) => (Object.assign(Object.assign({}, d), { type: "issue" }))));
+            allData.push(...issueData.map((d) => ({ ...d, type: "issue" })));
         }
         if (request.reportType === "all" || request.reportType === "inspections") {
             const inspData = await fetchInspectionsArchive(db, request);
-            allData.push(...inspData.map((d) => (Object.assign(Object.assign({}, d), { type: "inspection" }))));
+            allData.push(...inspData.map((d) => ({ ...d, type: "inspection" })));
         }
         // ─── ترتيب تنازلي حسب تاريخ الإكمال ──────────────────────
         allData.sort((a, b) => {
@@ -136,7 +136,7 @@ async function fetchMaintenanceArchive(db, request) {
             q = q.where("status", "==", request.status);
         }
         const snap = await q.limit(5000).get();
-        return snap.docs.map((d) => (Object.assign(Object.assign({ id: d.id }, d.data()), { collectionSource: "maintenance_tasks" })));
+        return snap.docs.map((d) => ({ id: d.id, ...d.data(), collectionSource: "maintenance_tasks" }));
     }
     catch (e) {
         logger.error("Error fetching maintenance archive", { error: e });
@@ -155,7 +155,7 @@ async function fetchWorkOrdersArchive(db, request) {
             q = q.where("completedAt", "<=", admin.firestore.Timestamp.fromDate(new Date(`${request.dateTo}T23:59:59`)));
         }
         const snap = await q.limit(5000).get();
-        return snap.docs.map((d) => (Object.assign(Object.assign({ id: d.id }, d.data()), { collectionSource: "work_orders" })));
+        return snap.docs.map((d) => ({ id: d.id, ...d.data(), collectionSource: "work_orders" }));
     }
     catch (e) {
         logger.error("Error fetching work orders archive", { error: e });
@@ -174,7 +174,7 @@ async function fetchIssuesArchive(db, request) {
             q = q.where("resolutionDate", "<=", admin.firestore.Timestamp.fromDate(new Date(`${request.dateTo}T23:59:59`)));
         }
         const snap = await q.limit(5000).get();
-        return snap.docs.map((d) => (Object.assign(Object.assign({ id: d.id }, d.data()), { collectionSource: "issue_logs" })));
+        return snap.docs.map((d) => ({ id: d.id, ...d.data(), collectionSource: "issue_logs" }));
     }
     catch (e) {
         logger.error("Error fetching issues archive", { error: e });
@@ -193,7 +193,7 @@ async function fetchInspectionsArchive(db, request) {
             q = q.where("completedAt", "<=", admin.firestore.Timestamp.fromDate(new Date(`${request.dateTo}T23:59:59`)));
         }
         const snap = await q.limit(5000).get();
-        return snap.docs.map((d) => (Object.assign(Object.assign({ id: d.id }, d.data()), { collectionSource: "inspection_records" })));
+        return snap.docs.map((d) => ({ id: d.id, ...d.data(), collectionSource: "inspection_records" }));
     }
     catch (e) {
         logger.error("Error fetching inspections archive", { error: e });
@@ -308,7 +308,7 @@ async function advancedArchiveSearch(params) {
                 if (!flat.includes(params.keywords.toLowerCase()))
                     return;
             }
-            results.push(Object.assign(Object.assign({ id: d.id }, data), { collectionSource: col }));
+            results.push({ id: d.id, ...data, collectionSource: col });
         });
     }));
     // ترتيب النتائج حسب التاريخ تنازليًا

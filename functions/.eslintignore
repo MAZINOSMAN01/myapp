@@ -1,0 +1,5 @@
+lib/
+node_modules/
+*.js.map
+*.d.ts
+*.config.js

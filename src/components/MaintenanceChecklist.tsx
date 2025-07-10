@@ -1,19 +1,19 @@
 // src/components/MaintenanceChecklist.tsx
-// نسخة مُحسَّنة تجمع الخصائص المتقدمة مع استقرار الإصدار القديم
+// نسخة متقدمة مع جميع الخصائص المحسنة
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom'
+import { db } from '@/firebase/config';
 import {
   collection,
   doc,
-  getDoc, 
   onSnapshot,
   query,
   Timestamp,
   updateDoc,
   where,
-} from 'firebase/firestore'
-import { db } from '@/firebase/config'
+  addDoc,
+  writeBatch,
+} from 'firebase/firestore';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -54,85 +54,55 @@ import {
   CheckCircle,
   PlayCircle,
   Eye,
+  Upload,
   RotateCcw,
+  Save,
+  FileText,
+  TrendingUp,
+  Users,
+  Calendar,
+  DollarSign,
 } from 'lucide-react';
-import type { MaintenancePlan, Frequency } from "@/types/maintenance"
 
-/*───────────────────────────────────────────
- * 0) الأنواع الموسّعة
- *──────────────────────────────────────────*/
-
-type TaskStatus =
-  | 'Pending'
-  | 'In Progress'
-  | 'Completed'
-  | 'Partially Done'
-  | 'Needs Review'
-  | 'Skipped'
-  | 'Failed';
-
-// السماح بـ 0 لإظهار "بلا تقييم بعد"
-export type QualityRating = 0 | 1 | 2 | 3 | 4 | 5;
-
-interface TaskTimer {
-  startTime?: Timestamp;
-  endTime?: Timestamp;
-  totalDuration: number; // بالدقائق
-  isPaused: boolean;
-  pausedDuration: number; // إجمالي زمن التوقف
-}
-
-interface TaskNote {
-  id: string;
-  text: string;
-  createdAt: Timestamp;
-  createdBy: string;
-}
-
-export interface AdvancedMaintenanceTask {
-  id: string;
-  taskDescription: string;
-  dueDate: Timestamp;
-  status: TaskStatus;
-  qualityRating?: Exclude<QualityRating, 0>; // لا نخزن 0 في القاعدة
-  timer: TaskTimer;
-  priority: 'Low' | 'Medium' | 'High' | 'Critical';
-  estimatedDuration?: number;
-  notes: TaskNote[];
-  assignedTo?: string;
-  completedBy?: string;
-  lastModified: Timestamp;
-}
+// استيراد الأنواع المحدثة
+import type { 
+  MaintenancePlan, 
+  AdvancedMaintenanceTask,
+  TaskStatus,
+  QualityRating,
+  TaskTimer,
+  TaskNote,
+  Priority,
+  PerformanceStats
+} from '@/types/maintenance';
 
 interface Props {
-   /** Optional plan object; if not provided, planId will be read from route */
-  plan?: MaintenancePlan
+  plan: MaintenancePlan;
 }
 
-/*───────────────────────────────────────────
- * 1) مكوّنات مساعدة
- *──────────────────────────────────────────*/
+/* ═══════════════════════════════════════════════════════════════
+ *                    HELPER COMPONENTS
+ * ═══════════════════════════════════════════════════════════════ */
 
-/** تقييم الجودة بالنجوم */
+/** مكون تقييم الجودة بالنجوم */
 const StarRating: React.FC<{
   rating: QualityRating;
   onRatingChange: (rating: Exclude<QualityRating, 0>) => void;
   readonly?: boolean;
 }> = ({ rating, onRatingChange, readonly = false }) => {
   return (
-    <div className="flex gap-1">
+    <div className="flex gap-1" title={`Quality Rating: ${rating}/5`}>
       {[1, 2, 3, 4, 5].map((star) => (
         <Button
           key={star}
           variant="ghost"
           size="sm"
-          className="p-0 h-6 w-6"
+          className="p-0 h-6 w-6 hover:scale-110 transition-transform"
           onClick={() => !readonly && onRatingChange(star as Exclude<QualityRating, 0>)}
           disabled={readonly}
-          title={`${star} stars`}
         >
           <Star
-            className={`h-4 w-4 ${
+            className={`h-4 w-4 transition-colors ${
               star <= rating
                 ? 'fill-yellow-400 text-yellow-400'
                 : 'text-gray-300 hover:text-yellow-200'
@@ -144,41 +114,41 @@ const StarRating: React.FC<{
   );
 };
 
-/** مؤقت المهمة */
+/** مكون مؤقت المهام */
 const TaskTimerComponent: React.FC<{
   timer: TaskTimer;
   onTimerUpdate: (timer: TaskTimer) => void;
-}> = ({ timer, onTimerUpdate }) => {
-  const [isRunning, setIsRunning] = useState(
-    !timer.isPaused && Boolean(timer.startTime) && !timer.endTime,
-  );
+  taskId: string;
+}> = ({ timer, onTimerUpdate, taskId }) => {
+  const [isRunning, setIsRunning] = useState(!timer.isPaused && !!timer.startTime && !timer.endTime);
   const [currentDuration, setCurrentDuration] = useState(timer.totalDuration);
-  const intervalRef = useRef<number | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout>();
 
-  /* تشغيل/إيقاف المؤقت الحي */
   useEffect(() => {
     if (isRunning && timer.startTime) {
-      intervalRef.current = window.setInterval(() => {
-        const now = Date.now();
-        const start = timer.startTime!.toDate().getTime();
-        const elapsed = Math.floor((now - start) / 60000); // بالدقائق
+      intervalRef.current = setInterval(() => {
+        const now = new Date();
+        const startTime = timer.startTime!.toDate();
+        const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 60000);
         setCurrentDuration(elapsed - timer.pausedDuration);
       }, 1000);
-    } else if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
     }
 
     return () => {
-      if (intervalRef.current !== null) clearInterval(intervalRef.current);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
     };
   }, [isRunning, timer.startTime, timer.pausedDuration]);
 
-  /* دوال التحكم */
   const startTimer = () => {
-    const newTimer: TaskTimer = {
+    const newTimer = {
       ...timer,
-      startTime: timer.startTime ?? Timestamp.now(),
+      startTime: timer.startTime || Timestamp.now(),
       isPaused: false,
     };
     setIsRunning(true);
@@ -186,18 +156,17 @@ const TaskTimerComponent: React.FC<{
   };
 
   const pauseTimer = () => {
-    const newTimer: TaskTimer = {
+    const newTimer = {
       ...timer,
       isPaused: true,
       totalDuration: currentDuration,
-      pausedDuration: timer.pausedDuration + (currentDuration - timer.totalDuration),
     };
     setIsRunning(false);
     onTimerUpdate(newTimer);
   };
 
   const stopTimer = () => {
-    const newTimer: TaskTimer = {
+    const newTimer = {
       ...timer,
       endTime: Timestamp.now(),
       totalDuration: currentDuration,
@@ -208,23 +177,20 @@ const TaskTimerComponent: React.FC<{
   };
 
   const resetTimer = () => {
-    const newTimer: TaskTimer = {
+    const newTimer = {
       totalDuration: 0,
       isPaused: false,
       pausedDuration: 0,
     };
-    if (intervalRef.current !== null) clearInterval(intervalRef.current);
     setIsRunning(false);
     setCurrentDuration(0);
     onTimerUpdate(newTimer);
   };
 
-  const formatDuration = (minutes: number) => {
-    const h = Math.floor(minutes / 60)
-      .toString()
-      .padStart(2, '0');
-    const m = (minutes % 60).toString().padStart(2, '0');
-    return `${h}:${m}`;
+  const formatDuration = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -235,22 +201,22 @@ const TaskTimerComponent: React.FC<{
       </div>
       <div className="flex gap-1">
         {!isRunning && !timer.endTime && (
-          <Button size="sm" variant="outline" onClick={startTimer} className="h-7 w-7 p-0" title="Start">
+          <Button size="sm" variant="outline" onClick={startTimer} className="h-7 w-7 p-0" title="Start Timer">
             <Play className="h-3 w-3" />
           </Button>
         )}
         {isRunning && (
-          <Button size="sm" variant="outline" onClick={pauseTimer} className="h-7 w-7 p-0" title="Pause">
+          <Button size="sm" variant="outline" onClick={pauseTimer} className="h-7 w-7 p-0" title="Pause Timer">
             <Pause className="h-3 w-3" />
           </Button>
         )}
         {(isRunning || timer.isPaused) && !timer.endTime && (
-          <Button size="sm" variant="default" onClick={stopTimer} className="h-7 w-7 p-0" title="Stop">
+          <Button size="sm" variant="default" onClick={stopTimer} className="h-7 w-7 p-0" title="Stop Timer">
             <CheckCircle className="h-3 w-3" />
           </Button>
         )}
         {currentDuration > 0 && (
-          <Button size="sm" variant="outline" onClick={resetTimer} className="h-7 w-7 p-0" title="Reset">
+          <Button size="sm" variant="outline" onClick={resetTimer} className="h-7 w-7 p-0" title="Reset Timer">
             <RotateCcw className="h-3 w-3" />
           </Button>
         )}
@@ -259,63 +225,82 @@ const TaskTimerComponent: React.FC<{
   );
 };
 
-/** شارة حالة المهمة */
+/** مكون شارة حالة المهمة */
 const TaskStatusBadge: React.FC<{ status: TaskStatus }> = ({ status }) => {
-  const getConfig = () => {
+  const getStatusConfig = (status: TaskStatus) => {
     switch (status) {
       case 'Pending':
-        return { cls: 'bg-gray-100 text-gray-800', Icon: Clock };
+        return { color: 'bg-gray-100 text-gray-800', icon: Clock };
       case 'In Progress':
-        return { cls: 'bg-blue-100 text-blue-800', Icon: PlayCircle };
+        return { color: 'bg-blue-100 text-blue-800', icon: PlayCircle };
       case 'Completed':
-        return { cls: 'bg-green-100 text-green-800', Icon: CheckCircle };
+        return { color: 'bg-green-100 text-green-800', icon: CheckCircle };
       case 'Partially Done':
-        return { cls: 'bg-yellow-100 text-yellow-800', Icon: CheckCircle2 };
+        return { color: 'bg-yellow-100 text-yellow-800', icon: CheckCircle2 };
       case 'Needs Review':
-        return { cls: 'bg-orange-100 text-orange-800', Icon: Eye };
+        return { color: 'bg-orange-100 text-orange-800', icon: Eye };
       case 'Skipped':
-        return { cls: 'bg-gray-100 text-gray-600', Icon: XCircle };
+        return { color: 'bg-gray-100 text-gray-600', icon: XCircle };
       case 'Failed':
-        return { cls: 'bg-red-100 text-red-800', Icon: AlertTriangle };
+        return { color: 'bg-red-100 text-red-800', icon: AlertTriangle };
       default:
-        return { cls: 'bg-gray-100 text-gray-800', Icon: Clock };
+        return { color: 'bg-gray-100 text-gray-800', icon: Clock };
     }
   };
-  const { cls, Icon } = getConfig();
+
+  const config = getStatusConfig(status);
+  const IconComponent = config.icon;
+
   return (
-    <Badge className={`${cls} flex items-center gap-1`}>
-      <Icon className="h-3 w-3" />
+    <Badge className={`${config.color} flex items-center gap-1`}>
+      <IconComponent className="h-3 w-3" />
       {status}
     </Badge>
   );
 };
 
-/*───────────────────────────────────────────
- * 2) المكوّن الرئيسي
- *──────────────────────────────────────────*/
+/** مكون شارة الأولوية */
+const PriorityBadge: React.FC<{ priority: Priority }> = ({ priority }) => {
+  const getPriorityConfig = (priority: Priority) => {
+    switch (priority) {
+      case 'Low':
+        return { color: 'bg-green-100 text-green-800', icon: '🟢' };
+      case 'Medium':
+        return { color: 'bg-yellow-100 text-yellow-800', icon: '🟡' };
+      case 'High':
+        return { color: 'bg-orange-100 text-orange-800', icon: '🟠' };
+      case 'Critical':
+        return { color: 'bg-red-100 text-red-800', icon: '🔴' };
+      default:
+        return { color: 'bg-gray-100 text-gray-800', icon: '⚪' };
+    }
+  };
 
-export function MaintenanceChecklist({ plan: initialPlan }: Props) {
-  const { planId } = useParams<{ planId?: string }>()
+  const config = getPriorityConfig(priority);
 
-  const [plan, setPlan] = useState<MaintenancePlan | null>(initialPlan ?? null)
-  const [tasks, setTasks] = useState<AdvancedMaintenanceTask[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [periodNotes, setPeriodNotes] = useState('')
-  const [selectedTask, setSelectedTask] = useState<AdvancedMaintenanceTask | null>(null)
-  const [showTaskDetails, setShowTaskDetails] = useState(false)
-  const [newNote, setNewNote] = useState('')
-  const { toast } = useToast()
+  return (
+    <Badge className={`${config.color} flex items-center gap-1`}>
+      <span>{config.icon}</span>
+      {priority}
+    </Badge>
+  );
+};
 
-  /* جلب الخطة إذا لم تمرر كمُعطى */
-  useEffect(() => {
-    if (initialPlan || !planId) return
-    getDoc(doc(db, 'maintenance_plans', planId)).then(d => {
-      if (d.exists()) setPlan({ id: d.id, ...(d.data() as any) } as MaintenancePlan)
-    })
-  }, [initialPlan, planId])
+/* ═══════════════════════════════════════════════════════════════
+ *                    MAIN COMPONENT
+ * ═══════════════════════════════════════════════════════════════ */
 
+export function MaintenanceChecklist({ plan }: Props) {
+  const [tasks, setTasks] = useState<AdvancedMaintenanceTask[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [notes, setNotes] = useState('');
+  const [selectedTask, setSelectedTask] = useState<AdvancedMaintenanceTask | null>(null);
+  const [showTaskDetails, setShowTaskDetails] = useState(false);
+  const [newNote, setNewNote] = useState('');
+  const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
+  const { toast } = useToast();
 
-  /*──────────────────── 2.1 جلب البيانات */
+  // استعلام المهام من قاعدة البيانات
   useEffect(() => {
     if (!plan?.id) return;
 
@@ -323,6 +308,7 @@ export function MaintenanceChecklist({ plan: initialPlan }: Props) {
     const today = new Date();
     let startPeriod: Date, endPeriod: Date;
 
+    // تحديد الفترة الزمنية بناءً على تكرار الخطة
     switch (plan.frequency) {
       case 'Daily':
         startPeriod = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
@@ -342,109 +328,224 @@ export function MaintenanceChecklist({ plan: initialPlan }: Props) {
       collection(db, 'maintenance_tasks'),
       where('planId', '==', plan.id),
       where('dueDate', '>=', Timestamp.fromDate(startPeriod)),
-      where('dueDate', '<=', Timestamp.fromDate(endPeriod)),
+      where('dueDate', '<=', Timestamp.fromDate(endPeriod))
     );
 
-    const unsub = onSnapshot(
+    const unsubscribe = onSnapshot(
       q,
       (snap) => {
-        const fetched: AdvancedMaintenanceTask[] = snap.docs.map((d) => {
-          const data = d.data() as any;
-          const task: AdvancedMaintenanceTask = {
+        const fetchedTasks = snap.docs.map((d) => {
+          const data = d.data();
+          
+          // ترحيل البيانات القديمة إلى البنية الجديدة
+          const advancedTask: AdvancedMaintenanceTask = {
             id: d.id,
-            taskDescription: data.taskDescription ?? '',
+            planId: data.planId || plan.id,
+            assetId: data.assetId || '',
+            taskDescription: data.taskDescription || '',
             dueDate: data.dueDate,
-            status: data.status ?? 'Pending',
-            qualityRating: data.qualityRating,
-            timer: data.timer ?? {
+            status: data.status || 'Pending',
+            type: data.type || 'Preventive',
+            qualityRating: data.qualityRating || undefined,
+            timer: data.timer || {
               totalDuration: 0,
               isPaused: false,
               pausedDuration: 0,
             },
-            priority: data.priority ?? 'Medium',
-            estimatedDuration: data.estimatedDuration,
-            notes: data.notes ?? [],
-            assignedTo: data.assignedTo,
-            completedBy: data.completedBy,
-            lastModified: data.lastModified ?? Timestamp.now(),
+            priority: data.priority || 'Medium',
+            estimatedDuration: data.estimatedDuration || undefined,
+            notes: data.notes || [],
+            assignedTo: data.assignedTo || undefined,
+            assignedToName: data.assignedToName || undefined,
+            completedBy: data.completedBy || undefined,
+            completedAt: data.completedAt || undefined,
+            cost: data.cost || undefined,
+            actualDuration: data.actualDuration || undefined,
+            createdAt: data.createdAt || Timestamp.now(),
+            lastModified: data.lastModified || Timestamp.now(),
+            createdBy: data.createdBy || 'system',
+            completionNotes: data.completionNotes || undefined,
+            attachments: data.attachments || [],
           };
-          return task;
+          
+          return advancedTask;
         });
-        setTasks(fetched);
+        
+        setTasks(fetchedTasks);
+        calculatePerformanceStats(fetchedTasks);
         setIsLoading(false);
       },
       (err) => {
         console.error(err);
-        toast({ title: 'DB Error', description: 'Unable to fetch tasks.', variant: 'destructive' });
+        toast({
+          title: 'Database Error',
+          description: 'Failed to fetch tasks.',
+          variant: 'destructive',
+        });
         setIsLoading(false);
-      },
+      }
     );
 
-    return () => unsub();
+    return () => unsubscribe();
   }, [plan.id, plan.frequency, toast]);
 
-  /*──────────────────── 2.2 التحديثات */
-  const updateTask = async (taskId: string, partial: Partial<AdvancedMaintenanceTask>) => {
+  // حساب إحصائيات الأداء
+  const calculatePerformanceStats = (tasks: AdvancedMaintenanceTask[]) => {
+    const stats: PerformanceStats = {
+      totalTasks: tasks.length,
+      completedTasks: tasks.filter(t => t.status === 'Completed').length,
+      pendingTasks: tasks.filter(t => t.status === 'Pending').length,
+      overdueTasks: tasks.filter(t => t.dueDate.toDate() < new Date() && t.status !== 'Completed').length,
+      averageCompletionTime: 0,
+      averageQualityRating: 0,
+      totalCost: 0,
+      weeklyCompletion: [],
+      monthlyCompletion: [],
+      tasksByStatus: {} as Record<TaskStatus, number>,
+      tasksByPriority: {} as Record<Priority, number>,
+      tasksByAsset: {},
+    };
+
+    // حساب متوسط الوقت والجودة
+    const completedTasks = tasks.filter(t => t.status === 'Completed');
+    if (completedTasks.length > 0) {
+      stats.averageCompletionTime = completedTasks.reduce((sum, task) => sum + (task.timer.totalDuration || 0), 0) / completedTasks.length;
+      stats.averageQualityRating = completedTasks.reduce((sum, task) => sum + (task.qualityRating || 0), 0) / completedTasks.length;
+      stats.totalCost = completedTasks.reduce((sum, task) => sum + (task.cost || 0), 0);
+    }
+
+    // توزيع المهام حسب الحالة
+    (['Pending', 'In Progress', 'Completed', 'Partially Done', 'Needs Review', 'Skipped', 'Failed'] as TaskStatus[]).forEach(status => {
+      stats.tasksByStatus[status] = tasks.filter(t => t.status === status).length;
+    });
+
+    // توزيع المهام حسب الأولوية
+    (['Low', 'Medium', 'High', 'Critical'] as Priority[]).forEach(priority => {
+      stats.tasksByPriority[priority] = tasks.filter(t => t.priority === priority).length;
+    });
+
+    setPerformanceStats(stats);
+  };
+
+  // تحديث حالة المهمة
+  const handleStatusUpdate = async (task: AdvancedMaintenanceTask, newStatus: TaskStatus) => {
+    if (task.status === newStatus) return;
+    
     try {
-      await updateDoc(doc(db, 'maintenance_tasks', taskId), {
-        ...partial,
+      const updatedTask = {
+        ...task,
+        status: newStatus,
         lastModified: Timestamp.now(),
+        ...(newStatus === 'Completed' && { 
+          completedBy: 'current_user', 
+          completedAt: Timestamp.now() 
+        }),
+      };
+
+      await updateDoc(doc(db, 'maintenance_tasks', task.id), updatedTask);
+      
+      toast({
+        title: 'Update Successful',
+        description: `Task status updated to ${newStatus}.`,
       });
-    } catch (e) {
-      toast({ title: 'Error', description: 'Failed to update task.', variant: 'destructive' });
-      throw e;
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update task status.',
+        variant: 'destructive',
+      });
     }
   };
 
-  const handleStatusUpdate = async (task: AdvancedMaintenanceTask, newStatus: TaskStatus) => {
-    if (task.status === newStatus) return;
-    try {
-      await updateTask(task.id, {
-        status: newStatus,
-        completedBy: newStatus === 'Completed' ? 'current_user' : task.completedBy,
-      });
-      toast({ title: 'Updated', description: `Status → ${newStatus}.` });
-    } catch {/* toast داخل updateTask */}
-  };
-
+  // تحديث تقييم الجودة
   const handleQualityRatingUpdate = async (task: AdvancedMaintenanceTask, rating: Exclude<QualityRating, 0>) => {
     try {
-      await updateTask(task.id, { qualityRating: rating });
-      toast({ title: 'Updated', description: `Quality ★ ${rating}` });
-    } catch {/* */}
+      const updatedTask = {
+        ...task,
+        qualityRating: rating,
+        lastModified: Timestamp.now(),
+      };
+
+      await updateDoc(doc(db, 'maintenance_tasks', task.id), updatedTask);
+      
+      toast({
+        title: 'Rating Updated',
+        description: `Quality rating updated to ${rating} stars.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update quality rating.',
+        variant: 'destructive',
+      });
+    }
   };
 
+  // تحديث المؤقت
   const handleTimerUpdate = async (task: AdvancedMaintenanceTask, timer: TaskTimer) => {
     try {
-      await updateTask(task.id, { timer });
-    } catch {/* */}
+      const updatedTask = {
+        ...task,
+        timer,
+        lastModified: Timestamp.now(),
+      };
+
+      await updateDoc(doc(db, 'maintenance_tasks', task.id), updatedTask);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update timer.',
+        variant: 'destructive',
+      });
+    }
   };
 
+  // إضافة ملاحظة جديدة
   const handleAddNote = async () => {
     if (!selectedTask || !newNote.trim()) return;
-    const note: TaskNote = {
-      id: Date.now().toString(),
-      text: newNote.trim(),
-      createdAt: Timestamp.now(),
-      createdBy: 'current_user',
-    };
+
     try {
-      await updateTask(selectedTask.id, { notes: [...selectedTask.notes, note] });
+      const note: TaskNote = {
+        id: Date.now().toString(),
+        text: newNote.trim(),
+        createdAt: Timestamp.now(),
+        createdBy: 'current_user',
+      };
+
+      const updatedNotes = [...selectedTask.notes, note];
+      
+      await updateDoc(doc(db, 'maintenance_tasks', selectedTask.id), {
+        notes: updatedNotes,
+        lastModified: Timestamp.now(),
+      });
+
       setNewNote('');
-      toast({ title: 'Added', description: 'Note saved.' });
-    } catch {/* */}
+      toast({
+        title: 'Added',
+        description: 'Note added successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to add note.',
+        variant: 'destructive',
+      });
+    }
   };
 
-  /*──────────────────── 2.3 الأعمدة والخانات */
+  // الحصول على عناوين الأعمدة
   const getColumnHeaders = () => {
     const today = new Date();
     switch (plan.frequency) {
       case 'Daily': {
-        const startWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
+        const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay()));
         return Array.from({ length: 7 }, (_, i) => {
-          const d = new Date(startWeek);
-          d.setDate(startWeek.getDate() + i);
-          return { day: d.toLocaleDateString('en-US', { weekday: 'short' }), date: d.getDate() };
+          const d = new Date(startOfWeek);
+          d.setDate(startOfWeek.getDate() + i);
+          return {
+            day: d.toLocaleDateString('en-US', { weekday: 'short' }),
+            date: d.getDate(),
+          };
         });
       }
       case 'Weekly':
@@ -462,7 +563,8 @@ export function MaintenanceChecklist({ plan: initialPlan }: Props) {
     }
   };
 
-  const findTaskForSlot = (desc: string, slot: number) =>
+  // العثور على المهمة المناسبة للفترة الزمنية
+  const findTaskForTimeSlot = (desc: string, slot: number) =>
     tasks.find((t) => {
       if (t.taskDescription !== desc) return false;
       const due = t.dueDate.toDate();
@@ -484,117 +586,322 @@ export function MaintenanceChecklist({ plan: initialPlan }: Props) {
       }
     });
 
-  const headers = getColumnHeaders();
-  const progress = tasks.length ? Math.round((tasks.filter((t) => t.status === 'Completed').length / tasks.length) * 100) : 0;
+  // حساب التقدم الإجمالي
+  const calculateProgress = () => {
+    if (tasks.length === 0) return 0;
+    const completedTasks = tasks.filter(t => t.status === 'Completed').length;
+    return Math.round((completedTasks / tasks.length) * 100);
+  };
 
-  /*──────────────────── 3) واجهة المستخدم */
-  if (!plan || isLoading)
+  // إنشاء تقرير الأداء
+  const generatePerformanceReport = async () => {
+    if (!performanceStats) return;
+
+    try {
+      const report = {
+        title: `Performance Report - ${plan.planName}`,
+        generatedAt: Timestamp.now(),
+        planId: plan.id,
+        dateRange: {
+          start: new Date(),
+          end: new Date(),
+        },
+        stats: performanceStats,
+        recommendations: generateRecommendations(performanceStats),
+        generatedBy: 'current_user',
+      };
+
+      await addDoc(collection(db, 'performance_reports'), report);
+      
+      toast({
+        title: 'Report Generated',
+        description: 'Performance report has been created successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to generate report.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // توليد التوصيات
+  const generateRecommendations = (stats: PerformanceStats): string[] => {
+    const recommendations: string[] = [];
+    
+    if (stats.overdueTasks > 0) {
+      recommendations.push(`${stats.overdueTasks} tasks are overdue. Consider reviewing task scheduling.`);
+    }
+    
+    if (stats.averageQualityRating < 3) {
+      recommendations.push('Quality ratings are below average. Additional training may be needed.');
+    }
+    
+    if (stats.averageCompletionTime > 120) {
+      recommendations.push('Tasks are taking longer than expected. Review resource allocation.');
+    }
+    
+    return recommendations;
+  };
+
+  const headers = getColumnHeaders();
+  const progress = calculateProgress();
+
+  if (isLoading) {
     return (
-      <div className="flex-center h-full p-4">
+      <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <span className="ml-2">Loading…</span>
+        <span className="ml-2">Loading Advanced Checklist...</span>
       </div>
     );
-const isPage = !!planId && !initialPlan;
+  }
+
   return (
-    <div className={`${isPage ? 'container mx-auto py-6' : ''} space-y-6 h-full flex flex-col`}>
-      {isPage && (
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">{plan.planName}</h1>
-          <Button asChild variant="outline">
-            <Link to="/maintenance-management">Back</Link>
+    <div className="space-y-6 h-full flex flex-col">
+      {/* شريط الإحصائيات والتقدم */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <CheckCircle className="h-4 w-4" />
+              Completion Rate
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{progress}%</div>
+            <Progress value={progress} className="mt-2" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Avg. Time
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {performanceStats ? Math.round(performanceStats.averageCompletionTime) : 0}m
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Per task</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Star className="h-4 w-4" />
+              Quality Rating
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {performanceStats ? performanceStats.averageQualityRating.toFixed(1) : 0}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Average stars</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Overdue Tasks
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {performanceStats ? performanceStats.overdueTasks : 0}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Need attention</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* أزرار الإجراءات */}
+      <div className="flex justify-between items-center">
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={generatePerformanceReport}
+            className="flex items-center gap-2"
+          >
+            <FileText className="h-4 w-4" />
+            Generate Report
           </Button>
         </div>
-      )}
-      {/* شريط التقدم العام */
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-lg">Maintenance Progress</CardTitle>
-            <Badge variant="outline" className="px-3 py-1">
-              {tasks.filter((t) => t.status === 'Completed').length} / {tasks.length} Completed
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Completion Rate</span>
-              <span>{progress}%</span>
-            </div>
-            <Progress value={progress} className="h-2" />
-          </div>
-        </CardContent>
-      </Card>
+        <Badge variant="outline" className="px-3 py-1">
+          {tasks.filter(t => t.status === 'Completed').length} / {tasks.length} Tasks
+        </Badge>
+      </div>
 
-
-
-        /* جدول المهام */}
+      {/* جدول المهام المتقدم */}
       <div className="border rounded-lg overflow-auto flex-grow">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="sticky left-0 z-10 w-[300px] max-w-[300px] bg-background">Task</TableHead>
+              <TableHead className="sticky left-0 z-10 w-[300px] max-w-[300px] bg-background">
+                Task Description
+              </TableHead>
               {headers.map((h, i) => (
-                <TableHead key={i} className="text-center whitespace-nowrap min-w-[200px]">
+                <TableHead key={i} className="text-center whitespace-nowrap min-w-[250px]">
                   {typeof h === 'string' ? h : `${h.day} ${h.date}`}
                 </TableHead>
               ))}
             </TableRow>
           </TableHeader>
+
           <TableBody>
             {(plan.tasks || []).map((desc, r) => (
               <TableRow key={r}>
-                {/* وصف المهمة */}
                 <TableCell className="sticky left-0 z-10 w-[300px] max-w-[300px] bg-background">
-                  <div className="max-h-32 overflow-y-auto whitespace-pre-wrap break-all p-2 font-medium">
-                    {desc}
+                  <div className="max-h-32 overflow-y-auto whitespace-pre-wrap break-all p-2">
+                    <div className="font-medium">{desc}</div>
                   </div>
                 </TableCell>
+
                 {headers.map((_, c) => {
-                  const task = findTaskForSlot(desc, c);
+                  const task = findTaskForTimeSlot(desc, c);
                   return (
                     <TableCell key={c} className="text-center p-2">
                       {task ? (
-                        <Card className="min-w-[180px]">
-                          <CardContent className="p-3 space-y-3">
-                            <div className="flex justify-center">
+                        <Card className="w-full min-w-[230px]">
+                          <CardContent className="p-4 space-y-3">
+                            {/* معلومات المهمة الأساسية */}
+                            <div className="flex justify-between items-start">
                               <TaskStatusBadge status={task.status} />
+                              <PriorityBadge priority={task.priority} />
                             </div>
+
+                            {/* أزرار التحكم في الحالة */}
                             <div className="flex justify-center gap-1">
-                              <Button size="sm" variant={task.status === 'In Progress' ? 'default' : 'outline'} onClick={() => handleStatusUpdate(task, 'In Progress')} className="h-8 w-8 p-0" title="Start">
+                              <Button
+                                size="sm"
+                                variant={task.status === 'In Progress' ? 'default' : 'outline'}
+                                onClick={() => handleStatusUpdate(task, 'In Progress')}
+                                className="h-8 w-8 p-0"
+                                title="Start Task"
+                              >
                                 <PlayCircle className="h-4 w-4" />
                               </Button>
-                              <Button size="sm" variant={task.status === 'Completed' ? 'default' : 'outline'} onClick={() => handleStatusUpdate(task, 'Completed')} className="h-8 w-8 p-0" title="Complete">
+
+                              <Button
+                                size="sm"
+                                variant={task.status === 'Completed' ? 'default' : 'outline'}
+                                onClick={() => handleStatusUpdate(task, 'Completed')}
+                                className="h-8 w-8 p-0"
+                                title="Complete Task"
+                              >
                                 <CheckCircle2 className="h-4 w-4" />
                               </Button>
-                              <Button size="sm" variant={task.status === 'Skipped' ? 'destructive' : 'outline'} onClick={() => handleStatusUpdate(task, 'Skipped')} className="h-8 w-8 p-0" title="Skip">
+
+                              <Button
+                                size="sm"
+                                variant={task.status === 'Needs Review' ? 'default' : 'outline'}
+                                onClick={() => handleStatusUpdate(task, 'Needs Review')}
+                                className="h-8 w-8 p-0"
+                                title="Needs Review"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant={task.status === 'Skipped' ? 'destructive' : 'outline'}
+                                onClick={() => handleStatusUpdate(task, 'Skipped')}
+                                className="h-8 w-8 p-0"
+                                title="Skip Task"
+                              >
                                 <XCircle className="h-4 w-4" />
                               </Button>
                             </div>
-                            <TaskTimerComponent timer={task.timer} onTimerUpdate={(t) => handleTimerUpdate(task, t)} />
+
+                            {/* مؤقت المهمة */}
+                            <TaskTimerComponent
+                              timer={task.timer}
+                              onTimerUpdate={(timer) => handleTimerUpdate(task, timer)}
+                              taskId={task.id}
+                            />
+
+                            {/* تقييم الجودة */}
                             {task.status === 'Completed' && (
-                              <div>
-                                <Label className="text-xs">Quality:</Label>
-                                <StarRating rating={task.qualityRating ?? 0} onRatingChange={(r) => handleQualityRatingUpdate(task, r)} />
+                              <div className="space-y-1">
+                                <Label className="text-xs">Quality Rating:</Label>
+                                <StarRating
+                                  rating={task.qualityRating || 0}
+                                  onRatingChange={(rating) => handleQualityRatingUpdate(task, rating)}
+                                />
                               </div>
                             )}
+
+                            {/* معلومات إضافية */}
+                            <div className="space-y-2">
+                              {task.assignedToName && (
+                                <Badge variant="secondary" className="text-xs">
+                                  👤 {task.assignedToName}
+                                </Badge>
+                              )}
+                              {task.estimatedDuration && (
+                                <Badge variant="secondary" className="text-xs">
+                                  ⏱️ {task.estimatedDuration}m est.
+                                </Badge>
+                              )}
+                              {task.cost && (
+                                <Badge variant="secondary" className="text-xs">
+                                  💰 ${task.cost}
+                                </Badge>
+                              )}
+                            </div>
+
+                            {/* أزرار إضافية */}
                             <div className="flex justify-center gap-1">
-                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Details" onClick={() => {
-                                setSelectedTask(task);
-                                setShowTaskDetails(true);
-                              }}>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setSelectedTask(task);
+                                  setShowTaskDetails(true);
+                                }}
+                                className="h-7 w-7 p-0"
+                                title="View Details"
+                              >
                                 <MessageSquare className="h-3 w-3" />
                               </Button>
-                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Attach Image">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0"
+                                title="Attach Image"
+                              >
                                 <Camera className="h-3 w-3" />
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0"
+                                title="Upload File"
+                              >
+                                <Upload className="h-3 w-3" />
+                              </Button>
                             </div>
-                            <div className="flex justify-center gap-1">
-                              {!!task.notes.length && <Badge variant="secondary" className="text-xs">{task.notes.length} Note(s)</Badge>}
-                              {!!task.timer.totalDuration && (
-                                <Badge variant="secondary" className="text-xs">
-                                  {Math.floor(task.timer.totalDuration / 60)}:{(task.timer.totalDuration % 60).toString().padStart(2, '0')}
+
+                            {/* مؤشرات إضافية */}
+                            <div className="flex justify-center gap-1 flex-wrap">
+                              {task.notes.length > 0 && (
+                                <Badge variant="outline" className="text-xs">
+                                  📝 {task.notes.length}
+                                </Badge>
+                              )}
+                              {task.attachments && task.attachments.length > 0 && (
+                                <Badge variant="outline" className="text-xs">
+                                  📎 {task.attachments.length}
+                                </Badge>
+                              )}
+                              {task.timer.totalDuration > 0 && (
+                                <Badge variant="outline" className="text-xs">
+                                  ⏱️ {Math.floor(task.timer.totalDuration / 60)}h {task.timer.totalDuration % 60}m
                                 </Badge>
                               )}
                             </div>
@@ -618,81 +925,183 @@ const isPage = !!planId && !initialPlan;
           <CardTitle className="text-lg">Period Notes</CardTitle>
         </CardHeader>
         <CardContent>
-          <Textarea placeholder="Add notes for this period…" value={periodNotes} onChange={(e) => setPeriodNotes(e.target.value)} className="min-h-[100px]" />
+          <Textarea
+            placeholder="Add any relevant notes for this period..."
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="min-h-[100px]"
+          />
+          <div className="flex justify-end mt-2">
+            <Button size="sm" className="flex items-center gap-2">
+              <Save className="h-4 w-4" />
+              Save Notes
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      {/* تفاصيل المهمة */}
+      {/* نافذة تفاصيل المهمة */}
       <Dialog open={showTaskDetails} onOpenChange={setShowTaskDetails}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Task Details</DialogTitle>
-            <DialogDescription>View & edit detailed info.</DialogDescription>
+            <DialogTitle>Advanced Task Details</DialogTitle>
+            <DialogDescription>
+              Complete task information and management interface
+            </DialogDescription>
           </DialogHeader>
+          
           {selectedTask && (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+              {/* معلومات عامة */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Task</Label>
-                  <p className="mt-1 p-2 border rounded-md bg-gray-50 whitespace-pre-wrap break-words">{selectedTask.taskDescription}</p>
+                  <Label>Task Description</Label>
+                  <p className="mt-1 p-2 border rounded-md bg-gray-50">{selectedTask.taskDescription}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Current Status</Label>
+                  <div className="flex items-center gap-2">
+                    <TaskStatusBadge status={selectedTask.status} />
+                    <PriorityBadge priority={selectedTask.priority} />
+                  </div>
                 </div>
                 <div>
-                  <Label>Status</Label>
-                  <div className="mt-1"><TaskStatusBadge status={selectedTask.status} /></div>
+                  <Label>Time Tracking</Label>
+                  <div className="mt-1 p-2 border rounded-md bg-gray-50">
+                    <div className="flex justify-between">
+                      <span>Total Time:</span>
+                      <span className="font-mono">
+                        {Math.floor(selectedTask.timer.totalDuration / 60)}:
+                        {(selectedTask.timer.totalDuration % 60).toString().padStart(2, '0')}
+                      </span>
+                    </div>
+                    {selectedTask.estimatedDuration && (
+                      <div className="flex justify-between text-sm text-gray-600">
+                        <span>Estimated:</span>
+                        <span>{selectedTask.estimatedDuration}m</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div>
-                  <Label>Time Spent</Label>
+                  <Label>Quality Assessment</Label>
+                  <div className="mt-1 p-2 border rounded-md bg-gray-50">
+                    <StarRating
+                      rating={selectedTask.qualityRating || 0}
+                      onRatingChange={(rating) => handleQualityRatingUpdate(selectedTask, rating)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* معلومات التكليف والتكلفة */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label>Assigned To</Label>
                   <p className="mt-1 p-2 border rounded-md bg-gray-50">
-                    {Math.floor(selectedTask.timer.totalDuration / 60)}:{(selectedTask.timer.totalDuration % 60).toString().padStart(2, '0')}
+                    {selectedTask.assignedToName || 'Not assigned'}
                   </p>
                 </div>
                 <div>
-                  <Label>Quality</Label>
-                  <StarRating rating={selectedTask.qualityRating ?? 0} onRatingChange={(r) => handleQualityRatingUpdate(selectedTask, r)} />
+                  <Label>Completed By</Label>
+                  <p className="mt-1 p-2 border rounded-md bg-gray-50">
+                    {selectedTask.completedBy || 'Not completed'}
+                  </p>
+                </div>
+                <div>
+                  <Label>Cost</Label>
+                  <p className="mt-1 p-2 border rounded-md bg-gray-50">
+                    {selectedTask.cost ? `$${selectedTask.cost}` : 'No cost recorded'}
+                  </p>
                 </div>
               </div>
+
               {/* الملاحظات */}
               <div className="space-y-4">
-                <Label className="font-semibold">Notes</Label>
+                <Label className="text-base font-semibold">Task Notes</Label>
+                
+                {/* إضافة ملاحظة جديدة */}
                 <div className="space-y-2">
-                  <Textarea value={newNote} onChange={(e) => setNewNote(e.target.value)} placeholder="Write your note here…" />
-                  <Button size="sm" disabled={!newNote.trim()} onClick={handleAddNote}>Add Note</Button>
+                  <Textarea 
+                    placeholder="Add a detailed note about this task..." 
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    className="min-h-[80px]"
+                  />
+                  <Button 
+                    onClick={handleAddNote} 
+                    size="sm" 
+                    disabled={!newNote.trim()}
+                    className="flex items-center gap-2"
+                  >
+                    <Save className="h-4 w-4" />
+                    Add Note
+                  </Button>
                 </div>
+                
+                {/* الملاحظات الموجودة */}
                 {selectedTask.notes.length > 0 && (
                   <div className="space-y-2">
-                    {selectedTask.notes.map((n) => (
-                      <Card key={n.id}>
-                        <CardContent className="p-3 space-y-1">
-                          <p className="text-sm whitespace-pre-wrap break-words">{n.text}</p>
-                          <div className="text-xs text-gray-500 flex justify-between">
-                            <span>By: {n.createdBy}</span>
-                            <span>{n.createdAt.toDate().toLocaleString('en-US')}</span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                    <Label>Previous Notes ({selectedTask.notes.length}):</Label>
+                    <div className="max-h-60 overflow-y-auto space-y-2">
+                      {selectedTask.notes.map((note) => (
+                        <Card key={note.id}>
+                          <CardContent className="p-3">
+                            <p className="text-sm whitespace-pre-wrap">{note.text}</p>
+                            <div className="flex justify-between text-xs text-gray-500 mt-2">
+                              <span>👤 {note.createdBy}</span>
+                              <span>🕐 {note.createdAt.toDate().toLocaleString()}</span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
-              {/* تغيير الحالة */}
-              <div className="space-y-2">
-                <Label className="font-semibold">Change Status</Label>
+
+              {/* تغيير حالة المهمة */}
+              <div className="space-y-3">
+                <Label className="text-base font-semibold">Change Task Status</Label>
                 <div className="flex flex-wrap gap-2">
-                  {(['Pending','In Progress','Completed','Partially Done','Needs Review','Skipped','Failed'] as TaskStatus[]).map((st) => (
-                    <Button key={st} size="sm" variant={selectedTask.status === st ? 'default' : 'outline'} onClick={() => handleStatusUpdate(selectedTask, st)}>
-                      {st}
+                  {(['Pending', 'In Progress', 'Completed', 'Partially Done', 'Needs Review', 'Skipped', 'Failed'] as TaskStatus[]).map((status) => (
+                    <Button
+                      key={status}
+                      size="sm"
+                      variant={selectedTask.status === status ? 'default' : 'outline'}
+                      onClick={() => handleStatusUpdate(selectedTask, status)}
+                      className="flex items-center gap-2"
+                    >
+                      {status}
                     </Button>
                   ))}
                 </div>
               </div>
+
+              {/* معلومات التتبع */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+                <div>
+                  <Label className="text-sm text-gray-500">Created</Label>
+                  <p className="text-sm">{selectedTask.createdAt.toDate().toLocaleString()}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Last Modified</Label>
+                  <p className="text-sm">{selectedTask.lastModified.toDate().toLocaleString()}</p>
+                </div>
+              </div>
             </div>
           )}
+          
           <DialogFooter>
-            <Button onClick={() => setShowTaskDetails(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setShowTaskDetails(false)}>
+              Close
+            </Button>
+            <Button onClick={() => setShowTaskDetails(false)}>
+              Save Changes
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
-export default MaintenanceChecklist;
