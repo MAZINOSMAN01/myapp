@@ -1,5 +1,5 @@
 // src/components/CreateMaintenancePlan.tsx
-// نسخة محسنة مع دعم الخصائص المتقدمة للمهام
+// النسخة المُصححة - حل جميع المشاكل
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import {
@@ -36,7 +36,7 @@ import {
   Save,
   X,
 } from "lucide-react";
-import { Timestamp, collection, getDocs, addDoc, updateDoc, doc } from "firebase/firestore";
+import { Timestamp, collection, getDocs, addDoc, updateDoc, doc, writeBatch } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -105,43 +105,23 @@ export interface CreateMaintenancePlanProps {
   assets: Asset[];
   users?: User[];
   onPlanCreated: (plan: NewMaintenancePlan) => Promise<void>;
-  editingPlan?: MaintenancePlan;
+  editingPlan?: MaintenancePlan | null;
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *                    PREDEFINED TEMPLATES
- * ═══════════════════════════════════════════════════════════════ */
-
+// قوالب المهام حسب نوع الأصل
 const TASK_TEMPLATES: Record<string, TaskTemplate[]> = {
-  HVAC: [
-    { id: '1', name: 'Filter Replacement', description: 'Replace air filters', estimatedDuration: 30, category: 'Routine' },
-    { id: '2', name: 'Coil Cleaning', description: 'Clean evaporator and condenser coils', estimatedDuration: 90, category: 'Deep Clean' },
-    { id: '3', name: 'Belt Inspection', description: 'Inspect and adjust drive belts', estimatedDuration: 20, category: 'Inspection' },
-    { id: '4', name: 'Thermostat Calibration', description: 'Check and calibrate thermostats', estimatedDuration: 45, category: 'Calibration' },
-    { id: '5', name: 'Ductwork Inspection', description: 'Inspect ductwork for leaks and damage', estimatedDuration: 60, category: 'Inspection' },
+  'HVAC': [
+    { id: '1', name: 'فحص المرشحات', description: 'فحص وتغيير مرشحات الهواء', estimatedDuration: 30, category: 'Preventive' },
+    { id: '2', name: 'فحص ضغط الفريون', description: 'قياس وفحص ضغط الغاز المبرد', estimatedDuration: 45, category: 'Preventive' },
+    { id: '3', name: 'تنظيف الوحدات', description: 'تنظيف الوحدات الداخلية والخارجية', estimatedDuration: 60, category: 'Cleaning' },
   ],
-  Electrical: [
-    { id: '6', name: 'Panel Inspection', description: 'Inspect electrical panels and connections', estimatedDuration: 45, category: 'Safety' },
-    { id: '7', name: 'Circuit Testing', description: 'Test circuit breakers and GFCIs', estimatedDuration: 30, category: 'Testing' },
-    { id: '8', name: 'Lighting Inspection', description: 'Check lighting systems and replace bulbs', estimatedDuration: 25, category: 'Routine' },
-    { id: '9', name: 'Emergency Power Test', description: 'Test backup generators and UPS systems', estimatedDuration: 120, category: 'Critical' },
+  'Electrical': [
+    { id: '4', name: 'فحص التوصيلات', description: 'فحص جميع التوصيلات الكهربائية', estimatedDuration: 40, category: 'Safety' },
+    { id: '5', name: 'اختبار القواطع', description: 'اختبار عمل القواطع الكهربائية', estimatedDuration: 30, category: 'Safety' },
   ],
-  Plumbing: [
-    { id: '10', name: 'Leak Inspection', description: 'Check for water leaks and drips', estimatedDuration: 40, category: 'Inspection' },
-    { id: '11', name: 'Drain Cleaning', description: 'Clean and clear drainage systems', estimatedDuration: 60, category: 'Cleaning' },
-    { id: '12', name: 'Water Pressure Test', description: 'Test water pressure throughout building', estimatedDuration: 35, category: 'Testing' },
-    { id: '13', name: 'Fixture Maintenance', description: 'Service faucets, toilets, and fixtures', estimatedDuration: 50, category: 'Maintenance' },
-  ],
-  Security: [
-    { id: '14', name: 'Camera System Check', description: 'Test surveillance cameras and recording', estimatedDuration: 40, category: 'Technology' },
-    { id: '15', name: 'Access Control Test', description: 'Test keycards and access control systems', estimatedDuration: 30, category: 'Technology' },
-    { id: '16', name: 'Alarm System Test', description: 'Test fire and security alarm systems', estimatedDuration: 45, category: 'Critical' },
-  ],
-  Cleaning: [
-    { id: '17', name: 'Deep Clean Common Areas', description: 'Thorough cleaning of lobbies and corridors', estimatedDuration: 120, category: 'Deep Clean' },
-    { id: '18', name: 'Window Cleaning', description: 'Clean interior and exterior windows', estimatedDuration: 90, category: 'Routine' },
-    { id: '19', name: 'Carpet Deep Clean', description: 'Steam clean carpeted areas', estimatedDuration: 180, category: 'Deep Clean' },
-    { id: '20', name: 'Restroom Sanitization', description: 'Deep sanitization of restroom facilities', estimatedDuration: 45, category: 'Sanitization' },
+  'Plumbing': [
+    { id: '6', name: 'فحص التسريبات', description: 'فحص الأنابيب للبحث عن تسريبات', estimatedDuration: 50, category: 'Preventive' },
+    { id: '7', name: 'تنظيف المجاري', description: 'تنظيف وصيانة أنظمة الصرف', estimatedDuration: 90, category: 'Cleaning' },
   ],
 };
 
@@ -155,11 +135,11 @@ export function CreateMaintenancePlan({
   assets,
   users = [],
   onPlanCreated,
-  editingPlan,
+  editingPlan = null,
 }: CreateMaintenancePlanProps) {
-  
+
   /* ═══════════════════════════════════════════════════════════════
-   *                         STATE MANAGEMENT
+   *                       STATE MANAGEMENT
    * ═══════════════════════════════════════════════════════════════ */
   
   const [spaces, setSpaces] = useState<SpaceLocation[]>([]);
@@ -188,6 +168,7 @@ export function CreateMaintenancePlan({
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingSpaces, setLoadingSpaces] = useState(false);
   
   const { toast } = useToast();
 
@@ -226,11 +207,15 @@ export function CreateMaintenancePlan({
    *                         EFFECTS
    * ═══════════════════════════════════════════════════════════════ */
 
-  // تحميل الأماكن
+  // تحميل الأماكن - التصحيح هنا: استخدام 'space_locations' بدلاً من 'spaces'
   useEffect(() => {
     const loadSpaces = async () => {
+      if (!isOpen) return;
+      
+      setLoadingSpaces(true);
       try {
-        const spacesSnapshot = await getDocs(collection(db, 'spaces'));
+        // ✅ التصحيح: استخدام اسم المجموعة الصحيح
+        const spacesSnapshot = await getDocs(collection(db, 'space_locations'));
         const spacesData = spacesSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
@@ -238,12 +223,14 @@ export function CreateMaintenancePlan({
         setSpaces(spacesData);
       } catch (error) {
         console.error('Error loading spaces:', error);
+        // عدم إظهار رسالة خطأ إذا كانت المجموعة غير موجودة
+        setSpaces([]);
+      } finally {
+        setLoadingSpaces(false);
       }
     };
 
-    if (isOpen) {
-      loadSpaces();
-    }
+    loadSpaces();
   }, [isOpen]);
 
   // تعبئة النموذج عند التحرير
@@ -273,8 +260,8 @@ export function CreateMaintenancePlan({
           onTaskCompleted: false,
         },
       });
-    } else if (!editingPlan && isOpen) {
-      // إعادة تعيين النموذج للإنشاء الجديد
+    } else {
+      // إعادة تعيين النموذج عند الإنشاء الجديد
       setFormData({
         assetId: '',
         planName: '',
@@ -298,6 +285,21 @@ export function CreateMaintenancePlan({
     }
   }, [editingPlan, isOpen]);
 
+  // تحديث بيانات الأصل عند تغيير الاختيار
+  useEffect(() => {
+    const asset = assetsWithSpaces.find(a => a.id === formData.assetId);
+    if (asset) {
+      setFormData(prev => ({
+        ...prev,
+        assetType: asset.types?.[0]?.name || '',
+        spaceId: asset.spaceId || '',
+        location: asset.location || '',
+        tasks: [], // مسح المهام عند تغيير الأصل
+      }));
+      setSelectedTemplates([]);
+    }
+  }, [formData.assetId, assetsWithSpaces]);
+
   /* ═══════════════════════════════════════════════════════════════
    *                         EVENT HANDLERS
    * ═══════════════════════════════════════════════════════════════ */
@@ -307,7 +309,7 @@ export function CreateMaintenancePlan({
     if (newTask.trim()) {
       setFormData(prev => ({
         ...prev,
-        tasks: [...prev.tasks, newTask.trim()],
+        tasks: [...prev.tasks, newTask.trim()]
       }));
       setNewTask('');
     }
@@ -317,48 +319,92 @@ export function CreateMaintenancePlan({
   const handleRemoveTask = useCallback((index: number) => {
     setFormData(prev => ({
       ...prev,
-      tasks: prev.tasks.filter((_, i) => i !== index),
+      tasks: prev.tasks.filter((_, i) => i !== index)
     }));
   }, []);
 
-  // إضافة قوالب المهام
+  // إضافة قوالب مهام
   const handleAddTemplates = useCallback(() => {
-    const templatesToAdd = availableTemplates.filter(template => 
-      selectedTemplates.includes(template.id)
-    );
+    const templatesToAdd = availableTemplates
+      .filter(template => selectedTemplates.includes(template.id))
+      .map(template => template.name);
     
-    const newTasks = templatesToAdd.map(template => template.description);
-    const avgDuration = templatesToAdd.length > 0 
-      ? Math.round(templatesToAdd.reduce((sum, t) => sum + t.estimatedDuration, 0) / templatesToAdd.length)
-      : formData.estimatedDurationPerTask;
-
     setFormData(prev => ({
       ...prev,
-      tasks: [...prev.tasks, ...newTasks],
-      estimatedDurationPerTask: avgDuration,
+      tasks: [...prev.tasks, ...templatesToAdd]
     }));
-    
     setSelectedTemplates([]);
-    
-    toast({
-      title: 'Templates Added',
-      description: `Added ${newTasks.length} task templates to the plan.`,
+  }, [availableTemplates, selectedTemplates]);
+
+  // دالة مساعدة لإزالة القيم undefined
+  const cleanUndefinedValues = (obj: any): any => {
+    const cleaned: any = {};
+    Object.keys(obj).forEach(key => {
+      if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') {
+        cleaned[key] = obj[key];
+      }
     });
-  }, [selectedTemplates, availableTemplates, formData.estimatedDurationPerTask, toast]);
+    return cleaned;
+  };
 
-  // تحديث الموقع عند تغيير الأصل
-  const handleAssetChange = useCallback((assetId: string) => {
-    const asset = assetsWithSpaces.find(a => a.id === assetId);
-    setFormData(prev => ({
-      ...prev,
-      assetId,
-      assetType: asset?.types?.[0]?.name || '',
-      spaceId: asset?.spaceId || '',
-      location: asset?.location || '',
-      tasks: [], // مسح المهام عند تغيير الأصل
-    }));
-    setSelectedTemplates([]);
-  }, [assetsWithSpaces]);
+  // دالة توليد المهام الفورية للخطة الجديدة
+  const generateImmediateTasks = async (planId: string, planData: any) => {
+    try {
+      const now = new Date();
+      const nextWeek = new Date(now);
+      nextWeek.setDate(now.getDate() + 7);
+      
+      // حساب أول موعد استحقاق
+      const firstDue = new Date(planData.firstDueDate.toDate());
+      
+      // إذا كان الموعد الأول خلال الأسبوع القادم، قم بتوليد المهام
+      if (firstDue <= nextWeek) {
+        const batch = writeBatch(db);
+        let tasksGenerated = 0;
+        
+        planData.tasks.forEach((taskDescription: string) => {
+          const newTaskRef = doc(collection(db, 'maintenance_tasks'));
+          batch.set(newTaskRef, {
+            planId: planId,
+            assetId: planData.assetId,
+            taskDescription,
+            type: 'Preventive',
+            status: 'Pending',
+            dueDate: planData.firstDueDate,
+            priority: planData.priority || 'Medium',
+            estimatedDuration: planData.estimatedDurationPerTask || 60,
+            timer: {
+              totalDuration: 0,
+              isPaused: false,
+              pausedDuration: 0,
+            },
+            notes: [],
+            attachments: [],
+            assignedTo: planData.assignedTo || null,
+            createdAt: Timestamp.now(),
+            lastModified: Timestamp.now(),
+            createdBy: 'plan_creation_auto',
+          });
+          tasksGenerated++;
+        });
+        
+        if (tasksGenerated > 0) {
+          await batch.commit();
+          toast({
+            title: 'Tasks Generated ✅',
+            description: `${tasksGenerated} initial tasks created and ready for the checklist.`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error generating immediate tasks:', error);
+      toast({
+        title: 'Tasks Generation Warning',
+        description: 'Plan created successfully, but failed to generate initial tasks. Use "Generate Tasks" button.',
+        variant: 'default',
+      });
+    }
+  };
 
   // حفظ الخطة
   const handleSubmit = async () => {
@@ -375,41 +421,51 @@ export function CreateMaintenancePlan({
     setIsSubmitting(true);
 
     try {
-      const planData: NewMaintenancePlan = {
+      // إنشاء بيانات الخطة مع تنظيف القيم undefined
+      const basePlanData = {
         assetId: formData.assetId,
-        assetType: formData.assetType,
-        spaceId: formData.spaceId,
-        location: formData.location,
         planName: formData.planName,
         frequency: formData.frequency,
         firstDueDate: Timestamp.fromDate(new Date(formData.firstDueDate)),
         tasks: formData.tasks,
-        assignedTo: formData.assignedTo,
-        
-        // الخصائص المتقدمة الجديدة
         priority: formData.priority,
         estimatedDurationPerTask: formData.estimatedDurationPerTask,
         isActive: formData.isActive,
-        description: formData.description,
       };
+
+      // إضافة الحقول الاختيارية فقط إذا كانت موجودة
+      const optionalFields = cleanUndefinedValues({
+        assetType: formData.assetType,
+        spaceId: formData.spaceId,
+        location: formData.location,
+        description: formData.description,
+        assignedTo: formData.assignedTo && formData.assignedTo !== 'unassigned' ? formData.assignedTo : undefined,
+      });
+
+      const planData = { ...basePlanData, ...optionalFields };
 
       if (editingPlan) {
         // تحديث الخطة الموجودة
-        await updateDoc(doc(db, 'maintenance_plans', editingPlan.id), {
+        const updateData = cleanUndefinedValues({
           ...planData,
           lastModified: Timestamp.now(),
         });
+        await updateDoc(doc(db, 'maintenance_plans', editingPlan.id), updateData);
       } else {
         // إنشاء خطة جديدة
-        await addDoc(collection(db, 'maintenance_plans'), {
+        const createData = cleanUndefinedValues({
           ...planData,
           createdAt: Timestamp.now(),
           lastModified: Timestamp.now(),
           lastGenerated: Timestamp.fromDate(new Date(0)), // لم يتم التوليد بعد
         });
+        const docRef = await addDoc(collection(db, 'maintenance_plans'), createData);
+        
+        // ✅ توليد فوري للمهام الأولى
+        await generateImmediateTasks(docRef.id, planData);
       }
 
-      await onPlanCreated(planData);
+      await onPlanCreated(planData as NewMaintenancePlan);
       onClose();
 
       toast({
@@ -441,59 +497,72 @@ export function CreateMaintenancePlan({
             <Settings className="h-5 w-5" />
             {editingPlan ? 'Edit Maintenance Plan' : 'Create Advanced Maintenance Plan'}
           </DialogTitle>
+          {/* ✅ التصحيح: إضافة DialogDescription لحل تحذير accessibility */}
           <DialogDescription>
             Create a comprehensive maintenance plan with advanced scheduling and tracking features.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* معلومات أساسية */}
+          {/* معلومات الأصل الأساسية */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Basic Information</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Asset Information
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Asset System *</Label>
-                  <Select value={formData.assetId} onValueChange={handleAssetChange}>
+                {/* اختيار الأصل */}
+                <div className="space-y-2">
+                  <Label htmlFor="asset">Asset *</Label>
+                  <Select 
+                    value={formData.assetId} 
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, assetId: value }))}
+                  >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select asset system" />
+                      <SelectValue placeholder="Select an asset" />
                     </SelectTrigger>
                     <SelectContent>
-                      {assetsWithSpaces.map((asset) => (
-                        <SelectItem key={asset.id} value={asset.id}>
-                          <div className="flex flex-col">
-                            <span>{asset.name}</span>
-                            {asset.location && (
-                              <span className="text-sm text-gray-500">{asset.location}</span>
-                            )}
-                          </div>
+                      {/* ✅ التصحيح: التأكد من أن كل SelectItem له قيمة value صحيحة */}
+                      {assets.map((asset) => (
+                        <SelectItem key={asset.id} value={asset.id || 'unknown'}>
+                          {asset.name} - {asset.location || 'No location'}
                         </SelectItem>
                       ))}
+                      {assets.length === 0 && (
+                        <SelectItem value="no-assets" disabled>
+                          No assets available
+                        </SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div>
-                  <Label>Plan Name *</Label>
+                {/* اسم الخطة */}
+                <div className="space-y-2">
+                  <Label htmlFor="planName">Plan Name *</Label>
                   <Input
+                    id="planName"
                     value={formData.planName}
                     onChange={(e) => setFormData(prev => ({ ...prev, planName: e.target.value }))}
-                    placeholder="e.g., Monthly HVAC Maintenance"
+                    placeholder="Enter plan name"
                   />
                 </div>
 
-                <div>
-                  <Label>Frequency *</Label>
-                  <Select 
-                    value={formData.frequency} 
+                {/* التكرار */}
+                <div className="space-y-2">
+                  <Label htmlFor="frequency">Frequency *</Label>
+                  <Select
+                    value={formData.frequency}
                     onValueChange={(value: Frequency) => setFormData(prev => ({ ...prev, frequency: value }))}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Select frequency" />
                     </SelectTrigger>
                     <SelectContent>
+                      {/* ✅ التصحيح: التأكد من أن كل SelectItem له قيمة value صحيحة وغير فارغة */}
                       <SelectItem value="Daily">Daily</SelectItem>
                       <SelectItem value="Weekly">Weekly</SelectItem>
                       <SelectItem value="Monthly">Monthly</SelectItem>
@@ -504,284 +573,286 @@ export function CreateMaintenancePlan({
                   </Select>
                 </div>
 
-                <div>
-                  <Label>First Due Date *</Label>
+                {/* التاريخ الأول */}
+                <div className="space-y-2">
+                  <Label htmlFor="firstDueDate">First Due Date *</Label>
                   <Input
+                    id="firstDueDate"
                     type="date"
                     value={formData.firstDueDate}
                     onChange={(e) => setFormData(prev => ({ ...prev, firstDueDate: e.target.value }))}
                   />
                 </div>
 
-                <div>
-                  <Label>Priority</Label>
-                  <Select 
-                    value={formData.priority} 
+                {/* الأولوية */}
+                <div className="space-y-2">
+                  <Label htmlFor="priority">Priority</Label>
+                  <Select
+                    value={formData.priority}
                     onValueChange={(value: Priority) => setFormData(prev => ({ ...prev, priority: value }))}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Low">🟢 Low</SelectItem>
-                      <SelectItem value="Medium">🟡 Medium</SelectItem>
-                      <SelectItem value="High">🟠 High</SelectItem>
-                      <SelectItem value="Critical">🔴 Critical</SelectItem>
+                      {/* ✅ التصحيح: التأكد من أن كل SelectItem له قيمة value صحيحة وغير فارغة */}
+                      <SelectItem value="Low">Low</SelectItem>
+                      <SelectItem value="Medium">Medium</SelectItem>
+                      <SelectItem value="High">High</SelectItem>
+                      <SelectItem value="Critical">Critical</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div>
-                  <Label>Assigned To</Label>
-                  <Select 
-                    value={formData.assignedTo || ''} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, assignedTo: value || undefined }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select user" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Unassigned</SelectItem>
-                      {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* المستخدم المعين */}
+                {users.length > 0 && (
+                  <div className="space-y-2">
+                    <Label htmlFor="assignedTo">Assigned To</Label>
+                    <Select
+                      value={formData.assignedTo || ''}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, assignedTo: value || undefined }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Assign to user" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {/* ✅ التصحيح: إضافة خيار عدم التعيين */}
+                        <SelectItem value="unassigned">No assignment</SelectItem>
+                        {users.map((user) => (
+                          <SelectItem key={user.id} value={user.id || 'unknown'}>
+                            {user.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
-              <div>
-                <Label>Description</Label>
+              {/* الوصف */}
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
                 <Textarea
-                  value={formData.description}
+                  id="description"
+                  value={formData.description || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Detailed description of the maintenance plan..."
-                  className="min-h-[80px]"
+                  placeholder="Enter plan description"
+                  rows={3}
                 />
               </div>
             </CardContent>
           </Card>
 
-          {/* قوالب المهام */}
-          {availableTemplates.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Task Templates</CardTitle>
-                <p className="text-sm text-gray-600">
-                  Quick-start templates for {selectedAsset?.name} maintenance
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
-                  {availableTemplates.map((template) => (
-                    <div key={template.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={template.id}
-                        checked={selectedTemplates.includes(template.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedTemplates(prev => [...prev, template.id]);
-                          } else {
-                            setSelectedTemplates(prev => prev.filter(id => id !== template.id));
-                          }
-                        }}
-                      />
-                      <Label htmlFor={template.id} className="text-sm cursor-pointer">
-                        <div>
-                          <span className="font-medium">{template.name}</span>
-                          <div className="text-xs text-gray-500">
-                            {template.description} ({template.estimatedDuration}m)
-                          </div>
-                        </div>
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-                {selectedTemplates.length > 0 && (
-                  <Button onClick={handleAddTemplates} variant="outline" size="sm">
-                    <PlusCircle className="h-4 w-4 mr-2" />
-                    Add Selected Templates ({selectedTemplates.length})
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* قائمة المهام */}
+          {/* إدارة المهام */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Maintenance Tasks</CardTitle>
-              <div className="flex items-center gap-4 text-sm text-gray-600">
-                <span>📋 {formData.tasks.length} tasks</span>
-                <span>⏱️ ~{Math.round(totalEstimatedTime / 60)}h {totalEstimatedTime % 60}m total</span>
-              </div>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Tasks Management
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* إضافة مهمة جديدة */}
-              <div className="flex gap-2">
-                <Input
-                  value={newTask}
-                  onChange={(e) => setNewTask(e.target.value)}
-                  placeholder="Enter a maintenance task..."
-                  onKeyPress={(e) => e.key === 'Enter' && handleAddTask()}
-                />
-                <Button onClick={handleAddTask} disabled={!newTask.trim()}>
-                  <PlusCircle className="h-4 w-4" />
-                </Button>
+              {/* إضافة قوالب المهام */}
+              {availableTemplates.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Task Templates</Label>
+                  <div className="space-y-2">
+                    {availableTemplates.map((template) => (
+                      <div key={template.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={template.id}
+                          checked={selectedTemplates.includes(template.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedTemplates(prev => [...prev, template.id]);
+                            } else {
+                              setSelectedTemplates(prev => prev.filter(id => id !== template.id));
+                            }
+                          }}
+                        />
+                        <Label htmlFor={template.id} className="text-sm">
+                          {template.name} - {template.description}
+                        </Label>
+                        <Badge variant="secondary">{template.estimatedDuration}min</Badge>
+                      </div>
+                    ))}
+                    {selectedTemplates.length > 0 && (
+                      <Button onClick={handleAddTemplates} variant="outline" size="sm">
+                        <PlusCircle className="h-4 w-4 mr-1" />
+                        Add Selected Templates
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* إضافة مهمة مخصصة */}
+              <div className="space-y-2">
+                <Label htmlFor="newTask">Add Custom Task</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="newTask"
+                    value={newTask}
+                    onChange={(e) => setNewTask(e.target.value)}
+                    placeholder="Enter task description"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTask();
+                      }
+                    }}
+                  />
+                  <Button onClick={handleAddTask} variant="outline" size="sm">
+                    <PlusCircle className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
               {/* قائمة المهام */}
               <div className="space-y-2">
-                {formData.tasks.map((task, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex-1">
-                      <span className="text-sm">{task}</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemoveTask(index)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                {formData.tasks.length === 0 && (
-                  <div className="text-center text-gray-500 py-8">
-                    No tasks added yet. Add tasks manually or use templates above.
+                <Label>Tasks ({formData.tasks.length})</Label>
+                {formData.tasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No tasks added yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {formData.tasks.map((task, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 border rounded">
+                        <span className="text-sm">{task}</span>
+                        <Button
+                          onClick={() => handleRemoveTask(index)}
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 )}
+              </div>
+
+              {/* تقدير الوقت */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="estimatedDuration">Estimated Duration per Task (minutes)</Label>
+                  <Input
+                    id="estimatedDuration"
+                    type="number"
+                    min="1"
+                    value={formData.estimatedDurationPerTask}
+                    onChange={(e) => setFormData(prev => ({ ...prev, estimatedDurationPerTask: parseInt(e.target.value) || 60 }))}
+                  />
+                </div>
+                <div className="flex items-end">
+                  <div className="text-sm text-muted-foreground">
+                    Total estimated time: {Math.floor(totalEstimatedTime / 60)}h {totalEstimatedTime % 60}m
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* إعدادات متقدمة */}
+          {/* الإعدادات المتقدمة */}
           <Card>
             <CardHeader>
-              <CardTitle 
-                className="text-lg cursor-pointer flex items-center justify-between"
-                onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-              >
-                <span>Advanced Settings</span>
-                <Button variant="ghost" size="sm">
-                  {showAdvancedSettings ? <X className="h-4 w-4" /> : <Settings className="h-4 w-4" />}
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Advanced Settings
+                </div>
+                <Button
+                  onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+                  variant="ghost"
+                  size="sm"
+                >
+                  {showAdvancedSettings ? 'Hide' : 'Show'}
                 </Button>
               </CardTitle>
             </CardHeader>
             {showAdvancedSettings && (
               <CardContent className="space-y-4">
+                {/* إعدادات التتبع */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Estimated Duration per Task (minutes)</Label>
-                    <Input
-                      type="number"
-                      value={formData.estimatedDurationPerTask}
-                      onChange={(e) => setFormData(prev => ({ 
-                        ...prev, 
-                        estimatedDurationPerTask: parseInt(e.target.value) || 60 
-                      }))}
-                      min="1"
-                      max="480"
-                    />
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="isActive"
-                      checked={formData.isActive}
-                      onCheckedChange={(checked) => setFormData(prev => ({ 
-                        ...prev, 
-                        isActive: checked as boolean 
-                      }))}
-                    />
-                    <Label htmlFor="isActive">Plan is Active</Label>
-                  </div>
-
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="enableQualityRating"
                       checked={formData.enableQualityRating}
-                      onCheckedChange={(checked) => setFormData(prev => ({ 
-                        ...prev, 
-                        enableQualityRating: checked as boolean 
-                      }))}
+                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, enableQualityRating: !!checked }))}
                     />
                     <Label htmlFor="enableQualityRating">Enable Quality Rating</Label>
                   </div>
-
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="enableTimeTracking"
                       checked={formData.enableTimeTracking}
-                      onCheckedChange={(checked) => setFormData(prev => ({ 
-                        ...prev, 
-                        enableTimeTracking: checked as boolean 
-                      }))}
+                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, enableTimeTracking: !!checked }))}
                     />
                     <Label htmlFor="enableTimeTracking">Enable Time Tracking</Label>
                   </div>
-
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="enableCostTracking"
                       checked={formData.enableCostTracking}
-                      onCheckedChange={(checked) => setFormData(prev => ({ 
-                        ...prev, 
-                        enableCostTracking: checked as boolean 
-                      }))}
+                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, enableCostTracking: !!checked }))}
                     />
                     <Label htmlFor="enableCostTracking">Enable Cost Tracking</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="isActive"
+                      checked={formData.isActive}
+                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: !!checked }))}
+                    />
+                    <Label htmlFor="isActive">Plan is Active</Label>
                   </div>
                 </div>
 
                 {/* إعدادات الإشعارات */}
-                <div className="border-t pt-4">
-                  <Label className="text-base font-medium">Notification Settings</Label>
-                  <div className="mt-2 space-y-2">
+                <div className="space-y-3">
+                  <Label>Notification Settings</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="flex items-center space-x-2">
                       <Checkbox
-                        id="onTaskCreated"
+                        id="notifyTaskCreated"
                         checked={formData.notificationSettings.onTaskCreated}
-                        onCheckedChange={(checked) => setFormData(prev => ({ 
-                          ...prev, 
+                        onCheckedChange={(checked) => setFormData(prev => ({
+                          ...prev,
                           notificationSettings: {
                             ...prev.notificationSettings,
-                            onTaskCreated: checked as boolean
+                            onTaskCreated: !!checked
                           }
                         }))}
                       />
-                      <Label htmlFor="onTaskCreated" className="text-sm">Notify when tasks are created</Label>
+                      <Label htmlFor="notifyTaskCreated">Task Created</Label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Checkbox
-                        id="onTaskOverdue"
+                        id="notifyTaskOverdue"
                         checked={formData.notificationSettings.onTaskOverdue}
-                        onCheckedChange={(checked) => setFormData(prev => ({ 
-                          ...prev, 
+                        onCheckedChange={(checked) => setFormData(prev => ({
+                          ...prev,
                           notificationSettings: {
                             ...prev.notificationSettings,
-                            onTaskOverdue: checked as boolean
+                            onTaskOverdue: !!checked
                           }
                         }))}
                       />
-                      <Label htmlFor="onTaskOverdue" className="text-sm">Notify when tasks become overdue</Label>
+                      <Label htmlFor="notifyTaskOverdue">Task Overdue</Label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Checkbox
-                        id="onTaskCompleted"
+                        id="notifyTaskCompleted"
                         checked={formData.notificationSettings.onTaskCompleted}
-                        onCheckedChange={(checked) => setFormData(prev => ({ 
-                          ...prev, 
+                        onCheckedChange={(checked) => setFormData(prev => ({
+                          ...prev,
                           notificationSettings: {
                             ...prev.notificationSettings,
-                            onTaskCompleted: checked as boolean
+                            onTaskCompleted: !!checked
                           }
                         }))}
                       />
-                      <Label htmlFor="onTaskCompleted" className="text-sm">Notify when tasks are completed</Label>
+                      <Label htmlFor="notifyTaskCompleted">Task Completed</Label>
                     </div>
                   </div>
                 </div>
@@ -789,62 +860,42 @@ export function CreateMaintenancePlan({
             )}
           </Card>
 
-          {/* ملخص الخطة */}
-          <Card className="bg-blue-50">
-            <CardHeader>
-              <CardTitle className="text-lg">Plan Summary</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <span className="font-medium">Total Tasks:</span>
-                  <div className="text-lg font-bold">{formData.tasks.length}</div>
-                </div>
-                <div>
-                  <span className="font-medium">Estimated Time:</span>
-                  <div className="text-lg font-bold">
-                    {Math.round(totalEstimatedTime / 60)}h {totalEstimatedTime % 60}m
+          {/* معلومات الأصل المختار */}
+          {selectedAsset && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Selected Asset Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <strong>Name:</strong> {selectedAsset.name}
+                  </div>
+                  <div>
+                    <strong>Location:</strong> {selectedAsset.location || 'Not specified'}
+                  </div>
+                  <div>
+                    <strong>Types:</strong> {selectedAsset.types?.length || 0} configured
                   </div>
                 </div>
-                <div>
-                  <span className="font-medium">Frequency:</span>
-                  <div className="text-lg font-bold">{formData.frequency}</div>
-                </div>
-                <div>
-                  <span className="font-medium">Priority:</span>
-                  <div className="text-lg font-bold">
-                    <Badge className={
-                      formData.priority === 'Critical' ? 'bg-red-100 text-red-800' :
-                      formData.priority === 'High' ? 'bg-orange-100 text-orange-800' :
-                      formData.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-green-100 text-green-800'
-                    }>
-                      {formData.priority}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+        <DialogFooter className="flex justify-between">
+          <Button onClick={onClose} variant="outline" disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleSubmit} 
-            disabled={isSubmitting || !formData.assetId || !formData.planName || formData.tasks.length === 0}
-            className="flex items-center gap-2"
-          >
+          <Button onClick={handleSubmit} disabled={isSubmitting || formData.tasks.length === 0}>
             {isSubmitting ? (
               <>
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                 {editingPlan ? 'Updating...' : 'Creating...'}
               </>
             ) : (
               <>
-                <Save className="h-4 w-4" />
+                <Save className="h-4 w-4 mr-2" />
                 {editingPlan ? 'Update Plan' : 'Create Plan'}
               </>
             )}
