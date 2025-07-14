@@ -35,6 +35,19 @@ import MaintenanceChecklistPage from './pages/MaintenanceChecklistPage';
 import { MaintenanceChecklist}  from './components/MaintenanceChecklist';
 
 const queryClient = new QueryClient();
+// إخفاء تحذيرات React Router v7 مؤقتاً
+const originalWarn = console.warn;
+console.warn = (...args: any[]) => {
+  if (
+    typeof args[0] === 'string' && 
+    (args[0].includes('React Router Future Flag Warning') || 
+     args[0].includes('v7_startTransition') || 
+     args[0].includes('v7_relativeSplatPath'))
+  ) {
+    return; // تجاهل تحذيرات React Router v7
+  }
+  originalWarn.apply(console, args);
+};
 
 function AppRoutes() {
   const { loading } = useAuth();
@@ -65,7 +78,7 @@ function AppRoutes() {
           <Route path="work-orders" element={<WorkOrders />} />
           <Route path="cleaning-management" element={<CleaningManagement />} />
           <Route path="maintenance-management" element={<MaintenancePage />} />
-          <Route path="maintenance-management/checklist/:planId" element={<MaintenanceChecklist />} />
+          <Route path="maintenance-management/checklist/:planId" element={<MaintenanceChecklistPage />} />
           <Route path="quotations-invoicing" element={<QuotationsInvoicing />} />
           <Route path="issue-log" element={<IssueLog />} />
           <Route path="lessons-learned" element={<LessonsLearned />} />
@@ -88,6 +101,7 @@ const App = () => {
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
+      
           <Toaster />
           <AppRoutes />
         </BrowserRouter>
