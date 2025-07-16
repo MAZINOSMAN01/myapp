@@ -175,7 +175,12 @@ export function Reports() {
     const filteredData = data.map(item => {
       const filtered: { [key: string]: any } = {};
       columns.forEach(col => {
-        filtered[col] = item[col] || 'N/A';
+        const value = item[col];
+        if (value instanceof Timestamp) {
+          filtered[col] = value.toDate().toLocaleString(); // Convert timestamp to readable string
+        } else {
+          filtered[col] = value !== undefined && value !== null ? value : 'N/A';
+        }
       });
       return filtered;
     });

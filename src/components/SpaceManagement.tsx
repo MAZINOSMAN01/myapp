@@ -1,4 +1,4 @@
-// src/components/SpaceManagement.tsx
+// src/components/SpaceManagementNew.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   collection,
@@ -223,16 +223,16 @@ export function SpaceManagement() {
     return unsubscribe;
   }, [toast]);
 
-  // Generate Location Code
+  // Generate Location Code - NO FLOOR INFORMATION
   const generateLocationCode = (structure: LocationStructure): string => {
-    const { building, floor, space } = structure;
-    return `${building}-FLOOR${floor}-${space.replace(/\s/g, '-')}`;
+    const { building, space } = structure;
+    return `${building}-${space.replace(/\s/g, '-')}`;
   };
 
-  // Generate Display Name
+  // Generate Display Name - NO FLOOR INFORMATION
   const generateDisplayName = (structure: LocationStructure): string => {
-    const { building, floor, space } = structure;
-    return `${building} FLOOR ${floor} ${space}`;
+    const { building, space } = structure;
+    return `${building} - ${space}`;
   };
 
   // Filtered Spaces
@@ -397,6 +397,7 @@ export function SpaceManagement() {
         updatedAt: Timestamp.now(),
         createdBy: currentUser.uid,
         updatedBy: currentUser.uid,
+        label: ''
       };
 
       await addDoc(collection(db, 'space_locations'), newSpace);
@@ -566,7 +567,7 @@ export function SpaceManagement() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Space Management</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Space Management (NEW)</h1>
           <p className="text-gray-600 mt-2">
             A comprehensive system for managing and tracking spaces and locations.
           </p>
@@ -647,7 +648,7 @@ export function SpaceManagement() {
                 Add New Space
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add New Space</DialogTitle>
               </DialogHeader>
@@ -788,7 +789,7 @@ export function SpaceManagement() {
 
           {/* Edit Space Dialog */}
           <Dialog open={isEditSpaceOpen} onOpenChange={setIsEditSpaceOpen}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Edit Space</DialogTitle>
               </DialogHeader>
@@ -1161,6 +1162,7 @@ export function SpaceManagement() {
                     <TableRow>
                       <TableHead>Location</TableHead>
                       <TableHead>Type</TableHead>
+                      <TableHead>Label</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Area</TableHead>
                       <TableHead>Capacity</TableHead>
@@ -1180,6 +1182,9 @@ export function SpaceManagement() {
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{space.spaceType}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-gray-600">{space.structure.label || '-'}</span>
                         </TableCell>
                         <TableCell>
                           <StatusBadge status={space.status} />

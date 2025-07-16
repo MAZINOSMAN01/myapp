@@ -41,6 +41,7 @@ export interface LocationStructure {
 
 /** معلومات المساحة الأساسية */
 export interface SpaceLocation {
+  label: string;
   id: string;
   locationCode: string;              // A1-FLOOR1-OFFICE-13
   displayName: string;               // A1 FLOOR 1 OFFICE 13

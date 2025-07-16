@@ -27,12 +27,12 @@ import { AssetManagement } from './components/AssetManagement'; // **إضافة:
 import { MOTsManagement } from './components/MOTsManagement';
 import { IssueLog } from './components/IssueLog';
 import { LessonsLearned } from './components/LessonsLearned';
-import { SpaceManagement } from './components/SpaceManagement'; 
 import { CleaningManagement } from './components/CleaningManagement';
 import { QuotationsInvoicing } from './components/QuotationsInvoicing';
 import { ArchiveReports } from './components/ArchiveReports';
 import MaintenanceChecklistPage from './pages/MaintenanceChecklistPage';
 import { MaintenanceChecklist}  from './components/MaintenanceChecklist';
+import { SpaceManagement } from './components/SpaceManagement';
 
 const queryClient = new QueryClient();
 // إخفاء تحذيرات React Router v7 مؤقتاً
