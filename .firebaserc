@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "facility-flow-nexus-backend"
-  }
+    "default": "facility-flow-nexus-backend",
+    "production": "facility-flow-nexus-backend"
+  },
+  "targets": {},
+  "etags": {}
 }
