@@ -118,6 +118,7 @@ export function AssetManagement() {
   const [spaces, setSpaces] = useState<SpaceLocation[]>([])
   const [filterSystem, setFilterSystem] = useState('all')
   const [filterType, setFilterType] = useState('')
+  const [filterLocation, setFilterLocation] = useState('all')
 
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<'add' | 'editType' | 'addType'>('add')
@@ -130,6 +131,8 @@ export function AssetManagement() {
   const [assetType, setAssetType] = useState('')
   const [assetLocation, setAssetLocation] = useState('')
   const [assetLocationId, setAssetLocationId] = useState('')
+  const [assetLabel, setAssetLabel] = useState('')
+  const [assetQuantity, setAssetQuantity] = useState<number>(1)
 
   const { toast } = useToast()
 
@@ -174,6 +177,8 @@ export function AssetManagement() {
     setAssetType('')
     setAssetLocation('')
     setAssetLocationId('')
+    setAssetLabel('')
+    setAssetQuantity(1)
     setIsDialogOpen(true)
   }
 
@@ -185,6 +190,8 @@ export function AssetManagement() {
     setAssetType(t.name)
     setAssetLocation(t.location ?? '')
     setAssetLocationId(t.spaceId ?? '')
+    setAssetLabel(t.label ?? '')
+    setAssetQuantity(t.quantity ?? 1)
     setIsDialogOpen(true)
   }
 
@@ -196,6 +203,8 @@ export function AssetManagement() {
     setAssetType('')
     setAssetLocation('')
     setAssetLocationId('')
+    setAssetLabel('')
+    setAssetQuantity(1)
     setIsDialogOpen(true)
   }
 
@@ -205,6 +214,8 @@ export function AssetManagement() {
     const type = assetType.trim()
     const location = assetLocation.trim()
     const spaceId = assetLocationId.trim()
+    const label = assetLabel.trim()
+    const quantity = assetQuantity
 
     if (!name || !type) {
       alert('System name and type are required.')
@@ -215,20 +226,20 @@ export function AssetManagement() {
       /* تعديل نوع */
       if (dialogMode === 'editType' && editingAsset && editingType) {
         const newTypes = editingAsset.types.map((t) =>
-           t.name === editingType.name ? { name: type, location, spaceId } : t,
+           t.name === editingType.name ? { name: type, location, spaceId, label, quantity } : t,
         )
         await updateDoc(doc(db, 'assets', editingAsset.id), { name, types: newTypes })
         toast({ description: 'Type updated.' })
       }
       /* إضافة نوع لنظام قائم */
       else if (dialogMode === 'addType' && editingAsset) {
-        const dup = editingAsset.types.some((t) => t.name === type && t.location === location)
+        const dup = editingAsset.types.some((t) => t.name === type && t.location === location && t.label === label)
         if (dup) {
-          alert('Type/location already exists.')
+          alert('Type/location/label combination already exists.')
           return
         }
         await updateDoc(doc(db, 'assets', editingAsset.id), {
-          types: [...editingAsset.types, { name: type, location, spaceId }],
+          types: [...editingAsset.types, { name: type, location, spaceId, label, quantity }],
         })
         toast({ description: 'Type added.' })
       }
@@ -236,19 +247,19 @@ export function AssetManagement() {
       else {
         const existing = assets.find((a) => a.name === name)
         if (existing) {
-          const dup = existing.types.some((t) => t.name === type && t.location === location)
+          const dup = existing.types.some((t) => t.name === type && t.location === location && t.label === label)
           if (dup) {
-            alert('Type/location already exists.')
+            alert('Type/location/label combination already exists.')
             return
           }
           await updateDoc(doc(db, 'assets', existing.id), {
-            types: [...existing.types, { name: type, location, spaceId }],
+            types: [...existing.types, { name: type, location, spaceId, label, quantity }],
           })
           toast({ description: 'Type added to existing system.' })
         } else {
           await addDoc(collection(db, 'assets'), {
             name,
-            types: [{ name: type, location, spaceId }]
+            types: [{ name: type, location, spaceId, label, quantity }]
           })
           toast({ description: 'New system created.' })
         }
@@ -292,14 +303,24 @@ export function AssetManagement() {
       assets
         .filter((a) => filterSystem === 'all' || a.name === filterSystem)
         .flatMap((a) => a.types.map((tp) => ({ ...a, singleType: tp })))
-        .filter((a) => !filterType || a.singleType.name.toLowerCase().includes(filterType.toLowerCase())),
-    [assets, filterSystem, filterType],
+        .filter((a) => !filterType || a.singleType.name.toLowerCase().includes(filterType.toLowerCase()))
+        .filter((a) => filterLocation === 'all' || a.singleType.location === filterLocation),
+    [assets, filterSystem, filterType, filterLocation],
   )
 
   const systemOptions = useMemo(() => Array.from(new Set(assets.map((a) => a.name))), [assets])
   const locationOptions = useMemo(() => {
     return Array.from(new Set(spaces.map((s) => s.displayName))).sort()
   }, [spaces])
+  const locationFilterOptions = useMemo(() => {
+    const locations = new Set(['all'])
+    assets.forEach((a) => {
+      a.types.forEach((t) => {
+        if (t.location) locations.add(t.location)
+      })
+    })
+    return Array.from(locations).sort()
+  }, [assets])
 
   /* ------------- الواجهة ------------- */
   return (
@@ -325,6 +346,20 @@ export function AssetManagement() {
               {systemOptions.map((s) => (
                 <SelectItem key={s} value={s}>
                   {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterLocation} onValueChange={setFilterLocation}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="All Locations" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Locations</SelectItem>
+              {locationFilterOptions.filter(l => l !== 'all').map((location) => (
+                <SelectItem key={location} value={location}>
+                  {location}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -378,6 +413,26 @@ export function AssetManagement() {
                 placeholder="Select or add a location…"
               />
             </div>
+
+            <div>
+              <Label>Label (optional)</Label>
+              <Input 
+                value={assetLabel} 
+                onChange={(e) => setAssetLabel(e.target.value)} 
+                placeholder="e.g., Type 1, Type 2, etc." 
+              />
+            </div>
+
+            <div>
+              <Label>Quantity</Label>
+              <Input 
+                type="number" 
+                value={assetQuantity} 
+                onChange={(e) => setAssetQuantity(parseInt(e.target.value) || 1)} 
+                placeholder="Enter quantity" 
+                min="1"
+              />
+            </div>
           </div>
 
           <DialogFooter className="mt-6 flex justify-end space-x-2">
@@ -397,9 +452,15 @@ export function AssetManagement() {
               <CardHeader className="flex justify-between items-start">
                 <div>
                   <CardTitle>{a.name}</CardTitle>
-                  <p className="text-sm text-muted-foreground">{a.singleType.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {a.singleType.name}
+                    {a.singleType.label && ` - ${a.singleType.label}`}
+                  </p>
                   {a.singleType.location && (
                     <p className="text-xs text-gray-500">📍 {a.singleType.location}</p>
+                  )}
+                  {a.singleType.quantity && (
+                    <p className="text-xs text-blue-600">Qty: {a.singleType.quantity}</p>
                   )}
                 </div>
 

@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '@/firebase/config';
+
 import {
   collection,
   doc,
@@ -80,6 +81,8 @@ interface Props {
   plan: MaintenancePlan;
 }
 
+
+
 /* ═══════════════════════════════════════════════════════════════
  *                    HELPER COMPONENTS
  * ═══════════════════════════════════════════════════════════════ */
@@ -113,6 +116,8 @@ const StarRating: React.FC<{
     </div>
   );
 };
+
+
 
 /** مكون مؤقت المهام */
 const TaskTimerComponent: React.FC<{
@@ -298,8 +303,8 @@ export function MaintenanceChecklist({ plan }: Props) {
   const [showTaskDetails, setShowTaskDetails] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('');
   const { toast } = useToast();
-
   // استعلام المهام من قاعدة البيانات
   useEffect(() => {
     if (!plan?.id) return;
@@ -432,23 +437,24 @@ export function MaintenanceChecklist({ plan }: Props) {
     if (task.status === newStatus) return;
     
     try {
-      const updatedTask = {
-        ...task,
+      const updateData: any = {
         status: newStatus,
         lastModified: Timestamp.now(),
-        ...(newStatus === 'Completed' && { 
-          completedBy: 'current_user', 
-          completedAt: Timestamp.now() 
-        }),
       };
+      
+      if (newStatus === 'Completed') {
+        updateData.completedBy = 'current_user';
+        updateData.completedAt = Timestamp.now();
+      }
 
-      await updateDoc(doc(db, 'maintenance_tasks', task.id), updatedTask);
+      await updateDoc(doc(db, 'maintenance_tasks', task.id), updateData);
       
       toast({
         title: 'Update Successful',
         description: `Task status updated to ${newStatus}.`,
       });
     } catch (error) {
+      console.error('Status update error:', error);
       toast({
         title: 'Error',
         description: 'Failed to update task status.',
@@ -460,19 +466,19 @@ export function MaintenanceChecklist({ plan }: Props) {
   // تحديث تقييم الجودة
   const handleQualityRatingUpdate = async (task: AdvancedMaintenanceTask, rating: Exclude<QualityRating, 0>) => {
     try {
-      const updatedTask = {
-        ...task,
+      const updateData = {
         qualityRating: rating,
         lastModified: Timestamp.now(),
       };
 
-      await updateDoc(doc(db, 'maintenance_tasks', task.id), updatedTask);
+      await updateDoc(doc(db, 'maintenance_tasks', task.id), updateData);
       
       toast({
         title: 'Rating Updated',
         description: `Quality rating updated to ${rating} stars.`,
       });
     } catch (error) {
+      console.error('Quality rating update error:', error);
       toast({
         title: 'Error',
         description: 'Failed to update quality rating.',
@@ -484,14 +490,14 @@ export function MaintenanceChecklist({ plan }: Props) {
   // تحديث المؤقت
   const handleTimerUpdate = async (task: AdvancedMaintenanceTask, timer: TaskTimer) => {
     try {
-      const updatedTask = {
-        ...task,
+      const updateData = {
         timer,
         lastModified: Timestamp.now(),
       };
 
-      await updateDoc(doc(db, 'maintenance_tasks', task.id), updatedTask);
+      await updateDoc(doc(db, 'maintenance_tasks', task.id), updateData);
     } catch (error) {
+      console.error('Timer update error:', error);
       toast({
         title: 'Error',
         description: 'Failed to update timer.',
@@ -525,6 +531,7 @@ export function MaintenanceChecklist({ plan }: Props) {
         description: 'Note added successfully.',
       });
     } catch (error) {
+      console.error('Add note error:', error);
       toast({
         title: 'Error',
         description: 'Failed to add note.',
@@ -593,34 +600,85 @@ export function MaintenanceChecklist({ plan }: Props) {
     return Math.round((completedTasks / tasks.length) * 100);
   };
 
-  // إنشاء تقرير الأداء
-  const generatePerformanceReport = async () => {
-    if (!performanceStats) return;
+  // حفظ الملاحظات
+  const handleSaveNotes = async () => {
+    if (!notes.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please enter some notes before saving.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     try {
+      const noteData = {
+        planId: plan.id,
+        notes: notes.trim(),
+        createdAt: Timestamp.now(),
+        createdBy: 'current_user',
+        period: selectedPeriod,
+      };
+
+      await addDoc(collection(db, 'maintenance_notes'), noteData);
+      
+      setNotes('');
+      
+      toast({
+        title: 'Success',
+        description: 'Notes saved successfully.',
+      });
+    } catch (error) {
+      console.error('Save notes error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save notes.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // إنشاء تقرير الأداء
+  const generatePerformanceReport = async () => {
+    if (!performanceStats) {
+      toast({
+        title: 'Error',
+        description: 'Performance statistics are not available.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const currentDate = new Date();
       const report = {
         title: `Performance Report - ${plan.planName}`,
         generatedAt: Timestamp.now(),
         planId: plan.id,
+        planName: plan.planName,
         dateRange: {
-          start: new Date(),
-          end: new Date(),
+          start: currentDate,
+          end: currentDate,
         },
         stats: performanceStats,
         recommendations: generateRecommendations(performanceStats),
         generatedBy: 'current_user',
+        totalTasks: tasks.length,
+        completedTasks: tasks.filter(t => t.status === 'Completed').length,
+        progress: calculateProgress(),
       };
 
       await addDoc(collection(db, 'performance_reports'), report);
       
       toast({
-        title: 'Report Generated',
-        description: 'Performance report has been created successfully.',
+        title: 'Report Generated Successfully',
+        description: `Performance report for ${plan.planName} has been created and saved.`,
       });
     } catch (error) {
+      console.error('Generate report error:', error);
       toast({
         title: 'Error',
-        description: 'Failed to generate report.',
+        description: 'Failed to generate performance report.',
         variant: 'destructive',
       });
     }
@@ -726,10 +784,10 @@ export function MaintenanceChecklist({ plan }: Props) {
           <Button
             variant="outline"
             onClick={generatePerformanceReport}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 hover:text-blue-800"
           >
             <FileText className="h-4 w-4" />
-            Generate Report
+            Generate Performance Report
           </Button>
         </div>
         <Badge variant="outline" className="px-3 py-1">
@@ -932,7 +990,11 @@ export function MaintenanceChecklist({ plan }: Props) {
             className="min-h-[100px]"
           />
           <div className="flex justify-end mt-2">
-            <Button size="sm" className="flex items-center gap-2">
+            <Button 
+              size="sm" 
+              className="flex items-center gap-2"
+              onClick={handleSaveNotes}
+            >
               <Save className="h-4 w-4" />
               Save Notes
             </Button>

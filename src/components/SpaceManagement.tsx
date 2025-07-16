@@ -56,6 +56,17 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 // Icons
 import {
@@ -425,6 +436,95 @@ export function SpaceManagement() {
     }
   };
 
+  // Delete Space
+  const handleDeleteSpace = async (space: SpaceLocation) => {
+    if (!currentUser) return;
+
+    try {
+      await deleteDoc(doc(db, 'space_locations', space.id));
+      
+      toast({
+        title: 'Success',
+        description: 'Space deleted successfully.',
+        variant: 'default',
+      });
+    } catch (error) {
+      console.error('Error deleting space:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete space.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Edit Space
+  const handleEditSpace = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !selectedSpace) return;
+
+    try {
+      const structure: LocationStructure = {
+        building: formData.building,
+        floor: formData.floor,
+        space: formData.space,
+        label: formData.label,
+      };
+
+      const locationCode = generateLocationCode(structure);
+      const displayName = generateDisplayName(structure);
+
+      // Check if location code changed and if new location already exists
+      if (locationCode !== selectedSpace.locationCode) {
+        const existingSpace = spaces.find((s) => s.locationCode === locationCode);
+        if (existingSpace) {
+          toast({
+            title: 'Error',
+            description: 'This location already exists.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
+      const updatedSpace: Partial<SpaceLocation> = {
+        locationCode,
+        displayName,
+        structure,
+        spaceType: formData.spaceType,
+        status: formData.status,
+        area: formData.area_size,
+        capacity: formData.capacity,
+        department: formData.department,
+        manager: formData.manager,
+        description: formData.description,
+        notes: formData.notes,
+        maintenancePriority: formData.maintenancePriority,
+        cleaningFrequency: formData.cleaningFrequency,
+        updatedAt: Timestamp.now(),
+        updatedBy: currentUser.uid,
+      };
+
+      await updateDoc(doc(db, 'space_locations', selectedSpace.id), updatedSpace);
+
+      setIsEditSpaceOpen(false);
+      setSelectedSpace(null);
+
+      toast({
+        title: 'Success',
+        description: 'Space updated successfully.',
+        variant: 'default',
+      });
+    } catch (error) {
+      console.error('Error updating space:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update space.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Status Badge Component
   const StatusBadge = ({ status }: { status: SpaceStatus }) => {
     const colors = {
@@ -616,17 +716,21 @@ export function SpaceManagement() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Space Type</Label>
-                    <Input
-                      list="type-options"
+                    <Select
                       value={formData.spaceType}
-                      onChange={(e) => setFormData({ ...formData, spaceType: e.target.value as SpaceType })}
-                      placeholder="Enter space type"
-                    />
-                    <datalist id="type-options">
-                      {spaceTypesList.map((type) => (
-                        <option key={type} value={type} />
-                      ))}
-                    </datalist>
+                      onValueChange={(value) => setFormData({ ...formData, spaceType: value as SpaceType })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select space type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {spaceTypesList.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div>
@@ -677,6 +781,223 @@ export function SpaceManagement() {
                     Cancel
                   </Button>
                   <Button type="submit">Save Space</Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit Space Dialog */}
+          <Dialog open={isEditSpaceOpen} onOpenChange={setIsEditSpaceOpen}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Edit Space</DialogTitle>
+              </DialogHeader>
+
+              <form onSubmit={handleEditSpace} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Building</Label>
+                    <Input
+                      list="building-options"
+                      value={formData.building}
+                      onChange={(e) => setFormData({ ...formData, building: e.target.value })}
+                      placeholder="Enter building"
+                      required
+                    />
+                    <datalist id="building-options">
+                      {buildingsList.map((building) => (
+                        <option key={building} value={building} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div>
+                    <Label>Floor</Label>
+                    <Input
+                      type="number"
+                      value={formData.floor}
+                      onChange={(e) => setFormData({ ...formData, floor: parseInt(e.target.value) || 1 })}
+                      min="1"
+                      max="50"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Space/Room</Label>
+                    <Input
+                      value={formData.space}
+                      onChange={(e) => setFormData({ ...formData, space: e.target.value })}
+                      placeholder="e.g., OFFICE 13, MEETING ROOM 5"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Label</Label>
+                    <Input
+                      list="label-options"
+                      value={formData.label}
+                      onChange={(e) => setFormData({ ...formData, label: e.target.value })}
+                      placeholder="Enter label"
+                      required
+                    />
+                    <datalist id="label-options">
+                      {labelsList.map((label) => (
+                        <option key={label} value={label} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Space Type</Label>
+                    <Select
+                      value={formData.spaceType}
+                      onValueChange={(value) => setFormData({ ...formData, spaceType: value as SpaceType })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select space type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {spaceTypesList.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Status</Label>
+                    <Select
+                      value={formData.status}
+                      onValueChange={(value) => setFormData({ ...formData, status: value as SpaceStatus })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SPACE_STATUSES.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Area (sq m)</Label>
+                    <Input
+                      type="number"
+                      value={formData.area_size}
+                      onChange={(e) => setFormData({ ...formData, area_size: parseFloat(e.target.value) || 0 })}
+                      min="0"
+                      step="0.1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Capacity</Label>
+                    <Input
+                      type="number"
+                      value={formData.capacity}
+                      onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) || 0 })}
+                      min="0"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Department</Label>
+                    <Input
+                      value={formData.department}
+                      onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                      placeholder="Enter department"
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Manager</Label>
+                    <Input
+                      value={formData.manager}
+                      onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
+                      placeholder="Enter manager name"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Maintenance Priority</Label>
+                    <Select
+                      value={formData.maintenancePriority}
+                      onValueChange={(value) => setFormData({ ...formData, maintenancePriority: value as MaintenancePriority })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MAINTENANCE_PRIORITIES.map((priority) => (
+                          <SelectItem key={priority} value={priority}>
+                            {priority}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Cleaning Frequency</Label>
+                    <Select
+                      value={formData.cleaningFrequency}
+                      onValueChange={(value) => setFormData({ ...formData, cleaningFrequency: value as 'Daily' | 'Weekly' | 'Monthly' })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select frequency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Daily">Daily</SelectItem>
+                        <SelectItem value="Weekly">Weekly</SelectItem>
+                        <SelectItem value="Monthly">Monthly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Description</Label>
+                  <Textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Enter description"
+                    rows={3}
+                  />
+                </div>
+
+                <div>
+                  <Label>Notes</Label>
+                  <Textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Enter notes"
+                    rows={2}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setIsEditSpaceOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">Update Space</Button>
                 </div>
               </form>
             </DialogContent>
@@ -876,11 +1197,51 @@ export function SpaceManagement() {
                               size="sm"
                               onClick={() => {
                                 setSelectedSpace(space);
+                                setFormData({
+                                  building: space.structure.building,
+                                  floor: space.structure.floor,
+                                  space: space.structure.space,
+                                  label: space.structure.label,
+                                  spaceType: space.spaceType,
+                                  status: space.status,
+                                  area_size: space.area,
+                                  capacity: space.capacity,
+                                  department: space.department || '',
+                                  manager: space.manager || '',
+                                  description: space.description || '',
+                                  notes: space.notes || '',
+                                  maintenancePriority: space.maintenancePriority,
+                                  cleaningFrequency: space.cleaningFrequency || 'Daily',
+                                });
                                 setIsEditSpaceOpen(true);
                               }}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Space</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete "{space.displayName}"? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteSpace(space)}>
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </TableCell>
                       </TableRow>

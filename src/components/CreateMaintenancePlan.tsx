@@ -73,6 +73,7 @@ interface EnhancedPlanFormData {
   // البيانات الأساسية
   assetId: string;
   assetType?: string;
+  selectedAssetTypes: string[];  // أنواع الأصول المحددة
   spaceId?: string;
   location?: string;
   planName: string;
@@ -145,6 +146,7 @@ export function CreateMaintenancePlan({
   const [spaces, setSpaces] = useState<SpaceLocation[]>([]);
   const [formData, setFormData] = useState<EnhancedPlanFormData>({
     assetId: '',
+     selectedAssetTypes: [],
     planName: '',
     description: '',
     frequency: 'Monthly',
@@ -239,6 +241,7 @@ export function CreateMaintenancePlan({
       setFormData({
         assetId: editingPlan.assetId,
         assetType: editingPlan.assetType,
+        selectedAssetTypes: editingPlan.selectedAssetTypes || [],
         spaceId: editingPlan.spaceId,
         location: editingPlan.location,
         planName: editingPlan.planName,
@@ -264,6 +267,9 @@ export function CreateMaintenancePlan({
       // إعادة تعيين النموذج عند الإنشاء الجديد
       setFormData({
         assetId: '',
+        selectedAssetTypes: [],
+        spaceId: undefined,
+        location: '',
         planName: '',
         description: '',
         frequency: 'Monthly',
@@ -292,9 +298,10 @@ export function CreateMaintenancePlan({
       setFormData(prev => ({
         ...prev,
         assetType: asset.types?.[0]?.name || '',
-        spaceId: asset.spaceId || '',
+        spaceId: asset.spaceId || undefined,
         location: asset.location || '',
         tasks: [], // مسح المهام عند تغيير الأصل
+        selectedAssetTypes: [], // مسح أنواع الأصول المحددة عند تغيير الأصل
       }));
       setSelectedTemplates([]);
     }
@@ -436,6 +443,7 @@ export function CreateMaintenancePlan({
       // إضافة الحقول الاختيارية فقط إذا كانت موجودة
       const optionalFields = cleanUndefinedValues({
         assetType: formData.assetType,
+        selectedAssetTypes: formData.selectedAssetTypes.length > 0 ? formData.selectedAssetTypes : undefined,
         spaceId: formData.spaceId,
         location: formData.location,
         description: formData.description,
@@ -540,6 +548,54 @@ export function CreateMaintenancePlan({
                   </Select>
                 </div>
 
+                {/* Asset Type Selection */}
+                {selectedAsset && selectedAsset.types && (
+                  <div className="space-y-2">
+                    <Label>Asset Types</Label>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Select which specific types of this asset to include in the maintenance plan:</p>
+                      <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto">
+                        {selectedAsset.types.length > 0 ? (
+                          selectedAsset.types.map((type, index) => (
+                            <div key={`${type.name}-${index}`} className="flex items-center space-x-2 p-2 border rounded">
+                              <Checkbox
+                                id={`type-${index}`}
+                                checked={formData.selectedAssetTypes.includes(`${type.name}-${type.label || 'default'}-${index}`)}
+                                onCheckedChange={(checked) => {
+                                  const typeId = `${type.name}-${type.label || 'default'}-${index}`;
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    selectedAssetTypes: checked
+                                      ? [...prev.selectedAssetTypes, typeId]
+                                      : prev.selectedAssetTypes.filter(t => t !== typeId)
+                                  }));
+                                }}
+                              />
+                              <Label htmlFor={`type-${index}`} className="flex-1 cursor-pointer">
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{type.name}</span>
+                                  {type.label && <span className="text-xs text-gray-500">{type.label}</span>}
+                                  {type.location && <span className="text-xs text-blue-600">📍 {type.location}</span>}
+                                  {type.quantity && <span className="text-xs text-green-600">Qty: {type.quantity}</span>}
+                                </div>
+                              </Label>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-2 text-sm text-muted-foreground border rounded">
+                            No types configured for this asset. Please add types in Asset Management first.
+                          </div>
+                        )}
+                      </div>
+                      {formData.selectedAssetTypes.length > 0 && (
+                        <Badge variant="outline" className="mt-2">
+                          {formData.selectedAssetTypes.length} type(s) selected
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* اسم الخطة */}
                 <div className="space-y-2">
                   <Label htmlFor="planName">Plan Name *</Label>
@@ -550,7 +606,67 @@ export function CreateMaintenancePlan({
                     placeholder="Enter plan name"
                   />
                 </div>
+              </div>
 
+              {/* Location Selection */}
+              <div className="space-y-4">
+                <Label className="text-base font-medium">Location Selection</Label>
+                
+                {/* Space Selection from Space Management */}
+                <div className="space-y-2">
+                  <Label htmlFor="space">Select from Space Management</Label>
+                  <Select 
+                    value={formData.spaceId || 'none'} 
+                    onValueChange={(value) => {
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        spaceId: value === 'none' ? undefined : value,
+                        location: value === 'none' ? prev.location : spaces.find(s => s.id === value)?.displayName || prev.location
+                      }))
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a space (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No space selected</SelectItem>
+                      {spaces.map((space) => (
+                        <SelectItem key={space.id} value={space.id}>
+                          {space.displayName} ({space.spaceType})
+                        </SelectItem>
+                      ))}
+                      {spaces.length === 0 && (
+                        <SelectItem value="no-spaces" disabled>
+                          No spaces available
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Custom Location Input */}
+                <div className="space-y-2">
+                  <Label htmlFor="customLocation">Or Enter Custom Location</Label>
+                  <Input
+                    id="customLocation"
+                    value={formData.location || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                    placeholder="Enter custom location or override space location"
+                  />
+                </div>
+
+                {/* Current Location Display */}
+                <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                  <strong>Current Location:</strong> {
+                    formData.location || 
+                    (formData.spaceId ? spaces.find(s => s.id === formData.spaceId)?.displayName : '') ||
+                    selectedAsset?.location || 
+                    'Not specified'
+                  }
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* التكرار */}
                 <div className="space-y-2">
                   <Label htmlFor="frequency">Frequency *</Label>

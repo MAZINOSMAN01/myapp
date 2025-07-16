@@ -29,6 +29,20 @@ type Asset = {
   location: string;
 };
 
+type SpaceLocation = {
+  id: string;
+  locationCode: string;
+  displayName: string;
+  structure: {
+    building: string;
+    floor: number;
+    space: string;
+    label: string;
+  };
+  spaceType: string;
+  status: string;
+};
+
 type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -37,7 +51,10 @@ type Props = {
 
 export function CreatePMPlan({ open, onOpenChange, onPlanCreated }: Props) {
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [spaces, setSpaces] = useState<SpaceLocation[]>([]);
   const [selectedAssetId, setSelectedAssetId] = useState<string>("");
+  const [selectedSpaceId, setSelectedSpaceId] = useState<string>("");
+  const [customLocation, setCustomLocation] = useState<string>("");
   const [taskList, setTaskList] = useState<string[]>([""]);
   const [frequency, setFrequency] = useState<
     "Weekly" | "Monthly" | "Quarterly" | "Semi-annually" | "Annually" | ""
@@ -46,10 +63,19 @@ export function CreatePMPlan({ open, onOpenChange, onPlanCreated }: Props) {
 
   useEffect(() => {
     async function load() {
-      const snap = await getDocs(collection(db, "assets"));
+      // Load assets
+      const assetsSnap = await getDocs(collection(db, "assets"));
       setAssets(
-        snap.docs.map(
+        assetsSnap.docs.map(
           (d) => ({ id: d.id, ...(d.data() as Omit<Asset, "id">) }) as Asset
+        )
+      );
+
+      // Load spaces
+      const spacesSnap = await getDocs(collection(db, "space_locations"));
+      setSpaces(
+        spacesSnap.docs.map(
+          (d) => ({ id: d.id, ...(d.data() as Omit<SpaceLocation, "id">) }) as SpaceLocation
         )
       );
     }
@@ -57,7 +83,16 @@ export function CreatePMPlan({ open, onOpenChange, onPlanCreated }: Props) {
   }, []);
 
   const selectedAsset = assets.find((a) => a.id === selectedAssetId);
+  const selectedSpace = spaces.find((s) => s.id === selectedSpaceId);
   const planName = selectedAsset ? selectedAsset.type : "";
+  
+  // Calculate location based on priority: custom > space > asset
+  const getLocation = () => {
+    if (customLocation.trim()) return customLocation;
+    if (selectedSpace) return selectedSpace.displayName;
+    if (selectedAsset) return selectedAsset.location;
+    return "";
+  };
 
   const addTaskField = () => setTaskList((l) => [...l, ""]);
 
@@ -76,7 +111,8 @@ export function CreatePMPlan({ open, onOpenChange, onPlanCreated }: Props) {
       assetId: selectedAsset.id,
       assetName: selectedAsset.name,
       assetType: selectedAsset.type,
-      location: selectedAsset.location,
+      location: getLocation(),
+      spaceId: selectedSpaceId || null,
       planName,
       planSlug: slug,
       tasks: taskList.filter((t) => t.trim() !== ""),
@@ -88,6 +124,8 @@ export function CreatePMPlan({ open, onOpenChange, onPlanCreated }: Props) {
     onOpenChange(false);
     onPlanCreated?.();
     setSelectedAssetId("");
+    setSelectedSpaceId("");
+    setCustomLocation("");
     setTaskList([""]);
     setFrequency("");
     setFirstDate("");
@@ -126,10 +164,36 @@ export function CreatePMPlan({ open, onOpenChange, onPlanCreated }: Props) {
           <Input value={planName} readOnly />
         </div>
 
-        {/* Location */}
+        {/* Location Selection */}
         <div className="space-y-2">
           <Label>Location</Label>
-          <Input value={selectedAsset?.location ?? ""} readOnly />
+          <div className="space-y-2">
+            {/* Space Selection */}
+            <Select value={selectedSpaceId} onValueChange={setSelectedSpaceId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select from space management (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                {spaces.map((space) => (
+                  <SelectItem key={space.id} value={space.id}>
+                    {space.displayName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            {/* Custom Location Input */}
+            <Input
+              value={customLocation}
+              onChange={(e) => setCustomLocation(e.target.value)}
+              placeholder="Or enter custom location"
+            />
+            
+            {/* Current Location Display */}
+            <div className="text-sm text-gray-600">
+              Current location: {getLocation() || "None selected"}
+            </div>
+          </div>
         </div>
 
         {/* Task Checklist */}

@@ -34,7 +34,7 @@ import {
 import { ShieldCheck, Eye, Edit, Trash2, MapPin } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type {
-  Assets,
+  Asset,
   MaintenancePlan as BaseMaintenancePlan,
 } from '@/types/maintenance';
 
@@ -52,7 +52,7 @@ interface MaintenancePlan extends BaseMaintenancePlan {
 
 export function PreventiveMaintenance() {
   /* ----------------------- الحالة ----------------------- */
-  const [assets, setAssets]               = useState<Assets[]>([]);
+  const [assets, setAssets]               = useState<Asset[]>([]);
   const [plans, setPlans]                 = useState<MaintenancePlan[]>([]);
   const [filterSystem, setFilterSystem]   = useState<string>('all');
   const [showCompleted, setShowCompleted] = useState<boolean>(false);
@@ -74,7 +74,7 @@ export function PreventiveMaintenance() {
           spaceId: raw.spaceId ?? '',
           location: raw.location,
           types: raw.types || [],
-        } as Assets;
+        } as Asset;
       });
       setAssets(list);
     });
@@ -84,14 +84,21 @@ export function PreventiveMaintenance() {
   /* ------------------- تحميل الخطط ------------------- */
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'maintenance_plans'), (snap) => {
-      const list = snap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<MaintenancePlan, 'id'>),
-      })) as MaintenancePlan[];
+      const list = snap.docs.map((d) => {
+        const data = d.data() as Omit<MaintenancePlan, 'id'>;
+        // Find asset name from assetId
+        const asset = assets.find(a => a.id === data.assetId);
+        return {
+          id: d.id,
+          ...data,
+          assetName: asset?.name || 'Unknown Asset',
+          location: asset?.location || data.location,
+        };
+      }) as MaintenancePlan[];
       setPlans(list);
     });
     return unsub;
-  }, []);
+  }, [assets]);
 
   /* ---------------- بيانات مشتقة ---------------- */
   const systemOptions = useMemo(

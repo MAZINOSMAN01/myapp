@@ -105,6 +105,8 @@ export interface NewMaintenancePlan {
   assetId: string
   /** نوع الأصل ضمن النظام (اختياري) */
   assetType?: string
+  /** أنواع الأصول المحددة للخطة */
+  selectedAssetTypes?: string[]
   /** الموقع النصي المعروض لهذا الأصل */
   location?: string
   /** معرّف المساحة المرتبطة إن وجد */
@@ -144,6 +146,8 @@ export interface AssetType {
   spaceId: string
   name: string
   location?: string
+  label?: string      // تسمية فرعية للنوع (Type 1, Type 2, etc.)
+  quantity?: number   // كمية هذا النوع
 }
 
 /** نظام (Asset) يضمّ مجموعة أنواع */
