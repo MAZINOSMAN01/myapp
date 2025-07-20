@@ -43,8 +43,8 @@ const styles = StyleSheet.create({
   },
   table: { display: "flex", width: "auto", borderStyle: "solid", borderWidth: 1, borderColor: '#e0e0e0' },
   tableRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
-  tableColHeader: { backgroundColor: '#f4f4f4', padding: 5, borderStyle: "solid", borderWidth: 0, borderRightWidth: 1, borderColor: '#e0e0e0' },
-  tableCol: { padding: 5, borderStyle: "solid", borderWidth: 0, borderRightWidth: 1, borderColor: '#e0e0e0' },
+  tableColHeader: { backgroundColor: '#f4f4f4', padding: 5, borderRightWidth: 1, borderRightColor: '#e0e0e0', borderRightStyle: 'solid' },
+  tableCol: { padding: 5, borderRightWidth: 1, borderRightColor: '#e0e0e0', borderRightStyle: 'solid' },
   tableCellHeader: { fontSize: 9, fontWeight: 'bold' },
   tableCell: { fontSize: 8 },
   summaryContainer: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#eaeaea' },
@@ -86,7 +86,7 @@ export const MaintenancePeriodReportPDF: React.FC<MaintenancePeriodReportProps> 
             <View style={{...styles.tableColHeader, width: '14%'}}><Text style={styles.tableCellHeader}>Status</Text></View>
             <View style={{...styles.tableColHeader, width: '14%'}}><Text style={styles.tableCellHeader}>Assigned To</Text></View>
             <View style={{...styles.tableColHeader, width: '14%'}}><Text style={styles.tableCellHeader}>Duration (m)</Text></View>
-            <View style={{...styles.tableColHeader, width: '14%', borderRightWidth: 0}}><Text style={styles.tableCellHeader}>Cost ($)</Text></View>
+            <View style={{...styles.tableColHeader, width: '14%', borderRightWidth: 0, borderRightColor: 'transparent'}}><Text style={styles.tableCellHeader}>Cost ($)</Text></View>
           </View>
           {tasks.map(task => (
             <View key={task.id} style={styles.tableRow}>
@@ -95,7 +95,7 @@ export const MaintenancePeriodReportPDF: React.FC<MaintenancePeriodReportProps> 
               <View style={{...styles.tableCol, width: '14%'}}><Text style={styles.tableCell}>{task.status}</Text></View>
               <View style={{...styles.tableCol, width: '14%'}}><Text style={styles.tableCell}>{task.assignedToName || 'Unassigned'}</Text></View>
               <View style={{...styles.tableCol, width: '14%'}}><Text style={styles.tableCell}>{task.timer.totalDuration}</Text></View>
-              <View style={{...styles.tableCol, width: '14%', borderRightWidth: 0}}><Text style={styles.tableCell}>{(task.cost || 0).toFixed(2)}</Text></View>
+              <View style={{...styles.tableCol, width: '14%', borderRightWidth: 0, borderRightColor: 'transparent'}}><Text style={styles.tableCell}>{(task.cost || 0).toFixed(2)}</Text></View>
             </View>
           ))}
         </View>

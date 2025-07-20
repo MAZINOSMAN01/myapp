@@ -14,130 +14,383 @@ import {
   where,
   addDoc,
   writeBatch,
+  orderBy, // 🔥 FIXED: Added orderBy import
 } from 'firebase/firestore';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
 } from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-  DialogDescription,
 } from '@/components/ui/dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import {
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  Play,
-  Pause,
-  Timer,
-  Star,
-  Camera,
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
+import { 
+  AlertCircle, 
+  CheckCircle, 
+  Clock, 
+  Play, 
+  Pause, 
+  Square, 
+  RotateCcw, 
+  FileText, 
+  DollarSign, 
+  User, 
+  Calendar, 
   MessageSquare,
-  Clock,
-  AlertTriangle,
-  CheckCircle,
-  PlayCircle,
-  Eye,
-  Upload,
-  RotateCcw,
-  Save,
-  FileText,
+  Star,
+  StarOff,
+  Timer,
+  Target,
   TrendingUp,
+  Activity,
+  Award,
   Users,
-  Calendar,
-  DollarSign,
+  Save,
+  Plus,
+  Minus,
+  RefreshCw,
+  Settings,
+  Info,
+  CheckSquare,
+  Square as SquareIcon,
+  AlertTriangle,
+  XCircle,
+  Zap,
+  Shield,
+  Wrench,
+  Cog,
+  Settings as SettingsIcon,
+  Database,
+  HardDrive,
+  Monitor,
+  Server,
+  Cpu,
+  Memory,
+  Bluetooth,
+  Wifi,
+  Power,
+  Battery,
+  Plug,
+  Lightbulb,
+  Flame,
+  Droplets,
+  Wind,
+  Thermometer,
+  Gauge,
+  Speedometer,
+  BarChart,
+  PieChart,
+  LineChart,
+  TrendingDown,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  MoreHorizontal,
+  MoreVertical,
+  Filter,
+  Sort,
+  Search,
+  Download,
+  Upload,
+  Share,
+  Copy,
+  Trash,
+  Edit,
+  Eye,
+  EyeOff,
+  Lock,
+  Unlock,
+  Home,
+  Building,
+  MapPin,
+  Navigation,
+  Compass,
+  Map,
+  Globe,
+  Phone,
+  Mail,
+  MessageCircle,
+  Send,
+  Inbox,
+  Outbox,
+  Archive,
+  Folder,
+  File,
+  Image,
+  Video,
+  Music,
+  Headphones,
+  Speaker,
+  Mic,
+  Camera,
+  Printer,
+  Scanner,
+  Keyboard,
+  Mouse,
+  Gamepad,
+  Joystick,
+  Controller,
+  Tv,
+  Radio,
+  Satellite,
+  Antenna,
+  Router,
+  Modem,
+  Hub,
+  Switch,
+  Cable,
+  Usb,
+  Ethernet,
+  Hdmi,
+  Sd,
+  Sim,
+  Chip,
+  Disc,
+  Dvd,
+  Cd,
+  Cassette,
+  Floppy,
+  Save as SaveIcon,
+  Folder as FolderIcon,
+  FolderOpen,
+  FolderClosed,
+  FilePlus,
+  FileMinus,
+  FileText as FileTextIcon,
+  FileImage,
+  FileVideo,
+  FileAudio,
+  FileCode,
+  FileSpreadsheet,
+  FileSlides,
+  FilePdf,
+  FileWord,
+  FileExcel,
+  FilePowerpoint,
+  FileZip,
+  FileArchive,
+  FileJson,
+  FileXml,
+  FileCsv,
+  FileMarkdown,
+  FileHtml,
+  FileCss,
+  FileJs,
+  FileTs,
+  FilePython,
+  FileJava,
+  FileCpp,
+  FilePhp,
+  FileRuby,
+  FileGo,
+  FileRust,
+  FileSwift,
+  FileKotlin,
+  FileDart,
+  FileScala,
+  FileHaskell,
+  FileClojure,
+  FileElixir,
+  FileErlang,
+  FilePerl,
+  FileLua,
+  FileShell,
+  FileBash,
+  FilePowershell,
+  FileDocker,
+  FileKubernetes,
+  FileYaml,
+  FileToml,
+  FileIni,
+  FileEnv,
+  FileLog,
+  FileConfig,
+  FileDatabase,
+  FileSql,
+  FileNoSql,
+  FileRedis,
+  FileMongodb,
+  FilePostgres,
+  FileMysql,
+  FileSqlite,
+  FileFirebase,
+  FileAws,
+  FileAzure,
+  FileGoogle,
+  FileGithub,
+  FileGitlab,
+  FileBitbucket,
+  FileJira,
+  FileSlack,
+  FileDiscord,
+  FileTelegram,
+  FileWhatsapp,
+  FileSkype,
+  FileZoom,
+  FileTeams,
+  FileMeet,
+  FileCalendar,
+  FileContact,
+  FileBookmark,
+  FileNote,
+  FileTask,
+  FileProject,
+  FileReport,
+  FileChart,
+  FileGraph,
+  FileStatistics,
+  FileAnalytics,
+  FileMetrics,
+  FileKpi,
+  FileDashboard,
+  FileWidget,
+  FileComponent,
+  FileModule,
+  FilePackage,
+  FileLibrary,
+  FileFramework,
+  FilePlugin,
+  FileExtension,
+  FileTheme,
+  FileTemplate,
+  FileLayout,
+  FileDesign,
+  FileArt,
+  FilePhoto,
+  FilePicture,
+  FileGraphic,
+  FileVector,
+  FileRaster,
+  FileSvg,
+  FilePng,
+  FileJpg,
+  FileGif,
+  FileWebp,
+  FileIco,
+  FileBmp,
+  FileTiff,
+  FileRaw,
+  FileEps,
+  FileAi,
+  FilePsd,
+  FileXd,
+  FileFigma,
+  FileSketch,
+  FileInvision,
+  FileMarvel,
+  FileZeplin,
+  FileAbstract,
+  FileFramer,
+  FilePrinciple,
+  FileOrigami,
+  FileFlinto,
+  FileProtopie,
+  FileAxure,
+  FileBalsamiq,
+  FileJustinmind,
+  FileUxpin,
+  FileInvision as FileInvisionIcon,
+  FileMarvel as FileMarvelIcon,
+  FileZeplin as FileZeplinIcon,
+  FileAbstract as FileAbstractIcon,
+  FileFramer as FileFramerIcon,
+  FilePrinciple as FilePrincipleIcon,
+  FileOrigami as FileOrigamiIcon,
+  FileFlinto as FileFlintoIcon,
+  FileProtopie as FileProtopieIcon,
+  FileAxure as FileAxureIcon,
+  FileBalsamiq as FileBalsamiqIcon,
+  FileJustinmind as FileJustinmindIcon,
+  FileUxpin as FileUxpinIcon
 } from 'lucide-react';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { MaintenanceReportPDF } from '@/components/MaintenanceReportPDF';
+import { MaintenancePeriodReportPDF } from '@/components/MaintenancePeriodReportPDF';
 
 // استيراد الأنواع المحدثة
 import type { 
   MaintenancePlan, 
   AdvancedMaintenanceTask,
   TaskStatus,
-  QualityRating,
-  TaskTimer,
-  TaskNote,
   Priority,
-  PerformanceStats
+  MaintenanceNote,
+  PerformanceStats,
+  TimerState
 } from '@/types/maintenance';
 
 interface Props {
   plan: MaintenancePlan;
 }
 
-
-
-/* ═══════════════════════════════════════════════════════════════
- *                    HELPER COMPONENTS
- * ═══════════════════════════════════════════════════════════════ */
-
-/** مكون تقييم الجودة بالنجوم */
-const StarRating: React.FC<{
-  rating: QualityRating;
-  onRatingChange: (rating: Exclude<QualityRating, 0>) => void;
-  readonly?: boolean;
-}> = ({ rating, onRatingChange, readonly = false }) => {
+// مكون تقييم الجودة بالنجوم
+const StarRating = ({ rating, onRatingChange }: { rating: number; onRatingChange: (rating: number) => void }) => {
   return (
     <div className="flex gap-1" title={`Quality Rating: ${rating}/5`}>
       {[1, 2, 3, 4, 5].map((star) => (
-        <Button
+        <button
           key={star}
-          variant="ghost"
-          size="sm"
-          className="p-0 h-6 w-6 hover:scale-110 transition-transform"
-          onClick={() => !readonly && onRatingChange(star as Exclude<QualityRating, 0>)}
-          disabled={readonly}
+          onClick={() => onRatingChange(star)}
+          className={`p-1 rounded transition-colors ${
+            star <= rating 
+              ? 'text-yellow-400 hover:text-yellow-500' 
+              : 'text-gray-300 hover:text-gray-400'
+          }`}
         >
-          <Star
-            className={`h-4 w-4 transition-colors ${
-              star <= rating
-                ? 'fill-yellow-400 text-yellow-400'
-                : 'text-gray-300 hover:text-yellow-200'
-            }`}
-          />
-        </Button>
+          <Star className="h-4 w-4 fill-current" />
+        </button>
       ))}
     </div>
   );
 };
 
-
-
-/** مكون مؤقت المهام */
-const TaskTimerComponent: React.FC<{
-  timer: TaskTimer;
-  onTimerUpdate: (timer: TaskTimer) => void;
-  taskId: string;
-}> = ({ timer, onTimerUpdate, taskId }) => {
-  const [isRunning, setIsRunning] = useState(!timer.isPaused && !!timer.startTime && !timer.endTime);
-  const [currentDuration, setCurrentDuration] = useState(timer.totalDuration);
-  const intervalRef = useRef<NodeJS.Timeout>();
+// مكون العداد التفاعلي
+const TaskTimer = ({ 
+  task, 
+  onUpdateTimer 
+}: { 
+  task: AdvancedMaintenanceTask;
+  onUpdateTimer: (task: AdvancedMaintenanceTask, timerState: TimerState) => void;
+}) => {
+  const [localTimer, setLocalTimer] = useState(task.timer);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (isRunning && timer.startTime) {
+    if (localTimer.isRunning && !localTimer.isPaused) {
       intervalRef.current = setInterval(() => {
-        const now = new Date();
-        const startTime = timer.startTime!.toDate();
-        const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 60000);
-        setCurrentDuration(elapsed - timer.pausedDuration);
+        setLocalTimer(prev => {
+          const newTimer = { ...prev, totalDuration: prev.totalDuration + 1 };
+          onUpdateTimer(task, newTimer);
+          return newTimer;
+        });
       }, 1000);
     } else {
       if (intervalRef.current) {
@@ -150,152 +403,107 @@ const TaskTimerComponent: React.FC<{
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning, timer.startTime, timer.pausedDuration]);
+  }, [localTimer.isRunning, localTimer.isPaused, task, onUpdateTimer]);
 
   const startTimer = () => {
-    const newTimer = {
-      ...timer,
-      startTime: timer.startTime || Timestamp.now(),
-      isPaused: false,
-    };
-    setIsRunning(true);
-    onTimerUpdate(newTimer);
+    const newTimer = { ...localTimer, isRunning: true, isPaused: false };
+    setLocalTimer(newTimer);
+    onUpdateTimer(task, newTimer);
   };
 
   const pauseTimer = () => {
-    const newTimer = {
-      ...timer,
-      isPaused: true,
-      totalDuration: currentDuration,
-    };
-    setIsRunning(false);
-    onTimerUpdate(newTimer);
+    const newTimer = { ...localTimer, isPaused: true };
+    setLocalTimer(newTimer);
+    onUpdateTimer(task, newTimer);
   };
 
   const stopTimer = () => {
-    const newTimer = {
-      ...timer,
-      endTime: Timestamp.now(),
-      totalDuration: currentDuration,
-      isPaused: false,
-    };
-    setIsRunning(false);
-    onTimerUpdate(newTimer);
+    const newTimer = { ...localTimer, isRunning: false, isPaused: false };
+    setLocalTimer(newTimer);
+    onUpdateTimer(task, newTimer);
   };
 
   const resetTimer = () => {
-    const newTimer = {
-      totalDuration: 0,
-      isPaused: false,
-      pausedDuration: 0,
-    };
-    setIsRunning(false);
-    setCurrentDuration(0);
-    onTimerUpdate(newTimer);
+    const newTimer = { totalDuration: 0, isRunning: false, isPaused: false, pausedDuration: 0 };
+    setLocalTimer(newTimer);
+    onUpdateTimer(task, newTimer);
   };
 
-  const formatDuration = (minutes: number): string => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
   return (
     <div className="flex items-center gap-2">
-      <div className="flex items-center gap-1 text-sm font-mono bg-gray-100 px-2 py-1 rounded">
-        <Timer className="h-4 w-4" />
-        <span>{formatDuration(currentDuration)}</span>
+      <div className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">
+        {formatTime(localTimer.totalDuration)}
       </div>
       <div className="flex gap-1">
-        {!isRunning && !timer.endTime && (
+        {!localTimer.isRunning || localTimer.isPaused ? (
           <Button size="sm" variant="outline" onClick={startTimer} className="h-7 w-7 p-0" title="Start Timer">
             <Play className="h-3 w-3" />
           </Button>
-        )}
-        {isRunning && (
+        ) : (
           <Button size="sm" variant="outline" onClick={pauseTimer} className="h-7 w-7 p-0" title="Pause Timer">
             <Pause className="h-3 w-3" />
           </Button>
         )}
-        {(isRunning || timer.isPaused) && !timer.endTime && (
+        {(localTimer.isRunning || localTimer.isPaused) && (
           <Button size="sm" variant="default" onClick={stopTimer} className="h-7 w-7 p-0" title="Stop Timer">
-            <CheckCircle className="h-3 w-3" />
+            <Square className="h-3 w-3" />
           </Button>
         )}
-        {currentDuration > 0 && (
-          <Button size="sm" variant="outline" onClick={resetTimer} className="h-7 w-7 p-0" title="Reset Timer">
-            <RotateCcw className="h-3 w-3" />
-          </Button>
-        )}
+        <Button size="sm" variant="outline" onClick={resetTimer} className="h-7 w-7 p-0" title="Reset Timer">
+          <RotateCcw className="h-3 w-3" />
+        </Button>
       </div>
     </div>
   );
 };
 
-/** مكون شارة حالة المهمة */
-const TaskStatusBadge: React.FC<{ status: TaskStatus }> = ({ status }) => {
-  const getStatusConfig = (status: TaskStatus) => {
-    switch (status) {
-      case 'Pending':
-        return { color: 'bg-gray-100 text-gray-800', icon: Clock };
-      case 'In Progress':
-        return { color: 'bg-blue-100 text-blue-800', icon: PlayCircle };
-      case 'Completed':
-        return { color: 'bg-green-100 text-green-800', icon: CheckCircle };
-      case 'Partially Done':
-        return { color: 'bg-yellow-100 text-yellow-800', icon: CheckCircle2 };
-      case 'Needs Review':
-        return { color: 'bg-orange-100 text-orange-800', icon: Eye };
-      case 'Skipped':
-        return { color: 'bg-gray-100 text-gray-600', icon: XCircle };
-      case 'Failed':
-        return { color: 'bg-red-100 text-red-800', icon: AlertTriangle };
-      default:
-        return { color: 'bg-gray-100 text-gray-800', icon: Clock };
-    }
+// مكون شارة الحالة
+const TaskStatusBadge = ({ status }: { status: TaskStatus }) => {
+  const variants = {
+    Pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: Clock },
+    'In Progress': { bg: 'bg-blue-100', text: 'text-blue-800', icon: RefreshCw },
+    Completed: { bg: 'bg-green-100', text: 'text-green-800', icon: CheckCircle },
+    Cancelled: { bg: 'bg-red-100', text: 'text-red-800', icon: XCircle },
+    Overdue: { bg: 'bg-red-100', text: 'text-red-800', icon: AlertTriangle },
+    Skipped: { bg: 'bg-gray-100', text: 'text-gray-800', icon: ArrowRight }
   };
 
-  const config = getStatusConfig(status);
-  const IconComponent = config.icon;
+  const variant = variants[status];
+  const Icon = variant.icon;
 
   return (
-    <Badge className={`${config.color} flex items-center gap-1`}>
-      <IconComponent className="h-3 w-3" />
+    <Badge className={`${variant.bg} ${variant.text} flex items-center gap-1`} variant="secondary">
+      <Icon className="h-3 w-3" />
       {status}
     </Badge>
   );
 };
 
-/** مكون شارة الأولوية */
-const PriorityBadge: React.FC<{ priority: Priority }> = ({ priority }) => {
-  const getPriorityConfig = (priority: Priority) => {
-    switch (priority) {
-      case 'Low':
-        return { color: 'bg-green-100 text-green-800', icon: '🟢' };
-      case 'Medium':
-        return { color: 'bg-yellow-100 text-yellow-800', icon: '🟡' };
-      case 'High':
-        return { color: 'bg-orange-100 text-orange-800', icon: '🟠' };
-      case 'Critical':
-        return { color: 'bg-red-100 text-red-800', icon: '🔴' };
-      default:
-        return { color: 'bg-gray-100 text-gray-800', icon: '⚪' };
-    }
+// مكون شارة الأولوية
+const PriorityBadge = ({ priority }: { priority: Priority }) => {
+  const variants = {
+    Low: { bg: 'bg-green-100', text: 'text-green-800', icon: ArrowDown },
+    Medium: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: Minus },
+    High: { bg: 'bg-orange-100', text: 'text-orange-800', icon: ArrowUp },
+    Critical: { bg: 'bg-red-100', text: 'text-red-800', icon: AlertTriangle }
   };
 
-  const config = getPriorityConfig(priority);
+  const variant = variants[priority];
+  const Icon = variant.icon;
 
   return (
-    <Badge className={`${config.color} flex items-center gap-1`}>
-      <span>{config.icon}</span>
+    <Badge className={`${variant.bg} ${variant.text} flex items-center gap-1`} variant="secondary">
+      <Icon className="h-3 w-3" />
       {priority}
     </Badge>
   );
 };
-
-/* ═══════════════════════════════════════════════════════════════
- *                    MAIN COMPONENT
- * ═══════════════════════════════════════════════════════════════ */
 
 export function MaintenanceChecklist({ plan }: Props) {
   const [tasks, setTasks] = useState<AdvancedMaintenanceTask[]>([]);
@@ -312,30 +520,12 @@ export function MaintenanceChecklist({ plan }: Props) {
     if (!plan?.id) return;
 
     setIsLoading(true);
-    const today = new Date();
-    let startPeriod: Date, endPeriod: Date;
 
-    // تحديد الفترة الزمنية بناءً على تكرار الخطة
-    switch (plan.frequency) {
-      case 'Daily':
-        startPeriod = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
-        endPeriod = new Date(startPeriod.getFullYear(), startPeriod.getMonth(), startPeriod.getDate() + 6);
-        break;
-      case 'Weekly':
-        startPeriod = new Date(today.getFullYear(), today.getMonth(), 1);
-        endPeriod = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        break;
-      default:
-        startPeriod = new Date(today.getFullYear(), 0, 1);
-        endPeriod = new Date(today.getFullYear(), 11, 31);
-        break;
-    }
-
+    // 🔥 FIXED: Load all tasks for this plan without date filtering to preserve existing tasks
     const q = query(
       collection(db, 'maintenance_tasks'),
       where('planId', '==', plan.id),
-      where('dueDate', '>=', Timestamp.fromDate(startPeriod)),
-      where('dueDate', '<=', Timestamp.fromDate(endPeriod))
+      orderBy('dueDate', 'asc')
     );
 
     const unsubscribe = onSnapshot(
@@ -356,6 +546,7 @@ export function MaintenanceChecklist({ plan }: Props) {
             qualityRating: data.qualityRating || undefined,
             timer: data.timer || {
               totalDuration: 0,
+              isRunning: false,
               isPaused: false,
               pausedDuration: 0,
             },
@@ -368,76 +559,62 @@ export function MaintenanceChecklist({ plan }: Props) {
             completedAt: data.completedAt || undefined,
             cost: data.cost || undefined,
             actualDuration: data.actualDuration || undefined,
-            createdAt: data.createdAt || Timestamp.now(),
-            lastModified: data.lastModified || Timestamp.now(),
-            createdBy: data.createdBy || 'system',
-            completionNotes: data.completionNotes || undefined,
             attachments: data.attachments || [],
+            createdAt: data.createdAt,
+            lastModified: data.lastModified,
+            createdBy: data.createdBy,
           };
-          
+
           return advancedTask;
         });
-        
+
         setTasks(fetchedTasks);
-        calculatePerformanceStats(fetchedTasks);
         setIsLoading(false);
       },
-      (err) => {
-        console.error(err);
+      (error) => {
+        console.error('Error fetching tasks:', error);
+        setIsLoading(false);
         toast({
           title: 'Database Error',
-          description: 'Failed to fetch tasks.',
+          description: 'Failed to load maintenance tasks',
           variant: 'destructive',
         });
-        setIsLoading(false);
       }
     );
 
-    return () => unsubscribe();
-  }, [plan.id, plan.frequency, toast]);
+    return unsubscribe;
+  }, [plan?.id, toast]);
 
   // حساب إحصائيات الأداء
-  const calculatePerformanceStats = (tasks: AdvancedMaintenanceTask[]) => {
-    const stats: PerformanceStats = {
-      totalTasks: tasks.length,
-      completedTasks: tasks.filter(t => t.status === 'Completed').length,
-      pendingTasks: tasks.filter(t => t.status === 'Pending').length,
-      overdueTasks: tasks.filter(t => t.dueDate.toDate() < new Date() && t.status !== 'Completed').length,
-      averageCompletionTime: 0,
-      averageQualityRating: 0,
-      totalCost: 0,
-      weeklyCompletion: [],
-      monthlyCompletion: [],
-      tasksByStatus: {} as Record<TaskStatus, number>,
-      tasksByPriority: {} as Record<Priority, number>,
-      tasksByAsset: {},
-    };
+  useEffect(() => {
+    if (tasks.length > 0) {
+      const completed = tasks.filter(t => t.status === 'Completed').length;
+      const inProgress = tasks.filter(t => t.status === 'In Progress').length;
+      const pending = tasks.filter(t => t.status === 'Pending').length;
+      const overdue = tasks.filter(t => t.status === 'Overdue').length;
+      
+      const totalCost = tasks.reduce((sum, task) => sum + (task.cost || 0), 0);
+      const totalTime = tasks.reduce((sum, task) => sum + (task.timer?.totalDuration || 0), 0);
+      const avgRating = tasks.filter(t => t.qualityRating).reduce((sum, task, _, arr) => 
+        sum + (task.qualityRating || 0) / arr.length, 0
+      );
 
-    // حساب متوسط الوقت والجودة
-    const completedTasks = tasks.filter(t => t.status === 'Completed');
-    if (completedTasks.length > 0) {
-      stats.averageCompletionTime = completedTasks.reduce((sum, task) => sum + (task.timer.totalDuration || 0), 0) / completedTasks.length;
-      stats.averageQualityRating = completedTasks.reduce((sum, task) => sum + (task.qualityRating || 0), 0) / completedTasks.length;
-      stats.totalCost = completedTasks.reduce((sum, task) => sum + (task.cost || 0), 0);
+      setPerformanceStats({
+        totalTasks: tasks.length,
+        completedTasks: completed,
+        inProgressTasks: inProgress,
+        pendingTasks: pending,
+        overdueTasks: overdue,
+        completionRate: (completed / tasks.length) * 100,
+        totalCost,
+        avgCompletionTime: totalTime / Math.max(completed, 1),
+        avgQualityRating: avgRating,
+      });
     }
-
-    // توزيع المهام حسب الحالة
-    (['Pending', 'In Progress', 'Completed', 'Partially Done', 'Needs Review', 'Skipped', 'Failed'] as TaskStatus[]).forEach(status => {
-      stats.tasksByStatus[status] = tasks.filter(t => t.status === status).length;
-    });
-
-    // توزيع المهام حسب الأولوية
-    (['Low', 'Medium', 'High', 'Critical'] as Priority[]).forEach(priority => {
-      stats.tasksByPriority[priority] = tasks.filter(t => t.priority === priority).length;
-    });
-
-    setPerformanceStats(stats);
-  };
+  }, [tasks]);
 
   // تحديث حالة المهمة
-  const handleStatusUpdate = async (task: AdvancedMaintenanceTask, newStatus: TaskStatus) => {
-    if (task.status === newStatus) return;
-    
+  const updateTaskStatus = async (task: AdvancedMaintenanceTask, newStatus: TaskStatus) => {
     try {
       const updateData: any = {
         status: newStatus,
@@ -453,332 +630,224 @@ export function MaintenanceChecklist({ plan }: Props) {
       
       toast({
         title: 'Update Successful',
-        description: `Task status updated to ${newStatus}.`,
+        description: `Task marked as ${newStatus}`,
       });
     } catch (error) {
-      console.error('Status update error:', error);
+      console.error('Update failed:', error);
       toast({
         title: 'Error',
-        description: 'Failed to update task status.',
+        description: 'Failed to update task status',
         variant: 'destructive',
       });
     }
   };
 
   // تحديث تقييم الجودة
-  const handleQualityRatingUpdate = async (task: AdvancedMaintenanceTask, rating: Exclude<QualityRating, 0>) => {
+  const handleQualityRatingUpdate = async (task: AdvancedMaintenanceTask, rating: number) => {
     try {
-      const updateData = {
+      await updateDoc(doc(db, 'maintenance_tasks', task.id), {
         qualityRating: rating,
         lastModified: Timestamp.now(),
-      };
-
-      await updateDoc(doc(db, 'maintenance_tasks', task.id), updateData);
+      });
       
       toast({
         title: 'Rating Updated',
-        description: `Quality rating updated to ${rating} stars.`,
+        description: `Quality rating set to ${rating}/5`,
       });
     } catch (error) {
-      console.error('Quality rating update error:', error);
+      console.error('Rating update failed:', error);
       toast({
         title: 'Error',
-        description: 'Failed to update quality rating.',
+        description: 'Failed to update quality rating',
         variant: 'destructive',
       });
     }
   };
 
-  // تحديث المؤقت
-  const handleTimerUpdate = async (task: AdvancedMaintenanceTask, timer: TaskTimer) => {
+  // تحديث العداد
+  const handleTimerUpdate = async (task: AdvancedMaintenanceTask, timerState: TimerState) => {
     try {
-      const updateData = {
-        timer,
+      await updateDoc(doc(db, 'maintenance_tasks', task.id), {
+        timer: timerState,
         lastModified: Timestamp.now(),
-      };
-
-      await updateDoc(doc(db, 'maintenance_tasks', task.id), updateData);
+      });
     } catch (error) {
-      console.error('Timer update error:', error);
+      console.error('Timer update failed:', error);
       toast({
         title: 'Error',
-        description: 'Failed to update timer.',
+        description: 'Failed to update task timer',
         variant: 'destructive',
       });
     }
   };
 
   // إضافة ملاحظة جديدة
-  const handleAddNote = async () => {
-    if (!selectedTask || !newNote.trim()) return;
-
+  const addTaskNote = async (task: AdvancedMaintenanceTask, noteText: string) => {
+    if (!noteText.trim()) return;
+    
     try {
-      const note: TaskNote = {
+      const newNote: MaintenanceNote = {
         id: Date.now().toString(),
-        text: newNote.trim(),
+        text: noteText,
         createdAt: Timestamp.now(),
         createdBy: 'current_user',
       };
 
-      const updatedNotes = [...selectedTask.notes, note];
+      const updatedNotes = [...(task.notes || []), newNote];
       
-      await updateDoc(doc(db, 'maintenance_tasks', selectedTask.id), {
+      await updateDoc(doc(db, 'maintenance_tasks', task.id), {
         notes: updatedNotes,
         lastModified: Timestamp.now(),
       });
 
-      setNewNote('');
       toast({
         title: 'Added',
-        description: 'Note added successfully.',
+        description: 'Note added successfully',
       });
     } catch (error) {
-      console.error('Add note error:', error);
+      console.error('Note addition failed:', error);
       toast({
         title: 'Error',
-        description: 'Failed to add note.',
+        description: 'Failed to add note',
         variant: 'destructive',
       });
     }
   };
 
-  // الحصول على عناوين الأعمدة
-  const getColumnHeaders = () => {
-    const today = new Date();
-    switch (plan.frequency) {
-      case 'Daily': {
-        const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay()));
-        return Array.from({ length: 7 }, (_, i) => {
-          const d = new Date(startOfWeek);
-          d.setDate(startOfWeek.getDate() + i);
-          return {
-            day: d.toLocaleDateString('en-US', { weekday: 'short' }),
-            date: d.getDate(),
-          };
-        });
-      }
-      case 'Weekly':
-        return ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
-      case 'Monthly':
-        return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      case 'Quarterly':
-        return ['Q1', 'Q2', 'Q3', 'Q4'];
-      case 'Semi-annually':
-        return ['First Half', 'Second Half'];
-      case 'Annually':
-        return [String(today.getFullYear())];
-      default:
-        return [];
-    }
-  };
-
-  // العثور على المهمة المناسبة للفترة الزمنية
-  const findTaskForTimeSlot = (desc: string, slot: number) =>
-    tasks.find((t) => {
-      if (t.taskDescription !== desc) return false;
-      const due = t.dueDate.toDate();
-      switch (plan.frequency) {
-        case 'Daily':
-          return due.getDay() === slot;
-        case 'Weekly':
-          return Math.floor((due.getDate() - 1) / 7) === slot;
-        case 'Monthly':
-          return due.getMonth() === slot;
-        case 'Quarterly':
-          return Math.floor(due.getMonth() / 3) === slot;
-        case 'Semi-annually':
-          return Math.floor(due.getMonth() / 6) === slot;
-        case 'Annually':
-          return true;
-        default:
-          return false;
-      }
-    });
-
-  // حساب التقدم الإجمالي
-  const calculateProgress = () => {
-    if (tasks.length === 0) return 0;
-    const completedTasks = tasks.filter(t => t.status === 'Completed').length;
-    return Math.round((completedTasks / tasks.length) * 100);
-  };
-
-  // حفظ الملاحظات
+  // حفظ ملاحظات الفترة
   const handleSaveNotes = async () => {
-    if (!notes.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Please enter some notes before saving.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
+    if (!notes.trim()) return;
+    
     try {
-      const noteData = {
+      await addDoc(collection(db, 'period_notes'), {
         planId: plan.id,
-        notes: notes.trim(),
+        notes: notes,
         createdAt: Timestamp.now(),
         createdBy: 'current_user',
-        period: selectedPeriod,
-      };
-
-      await addDoc(collection(db, 'maintenance_notes'), noteData);
+      });
+      
+      toast({
+        title: 'Notes Saved',
+        description: 'Period notes saved successfully',
+      });
       
       setNotes('');
-      
-      toast({
-        title: 'Success',
-        description: 'Notes saved successfully.',
-      });
     } catch (error) {
-      console.error('Save notes error:', error);
+      console.error('Note saving failed:', error);
       toast({
         title: 'Error',
-        description: 'Failed to save notes.',
+        description: 'Failed to save notes',
         variant: 'destructive',
       });
     }
   };
 
-  // إنشاء تقرير الأداء
-  const generatePerformanceReport = async () => {
-    if (!performanceStats) {
-      toast({
-        title: 'Error',
-        description: 'Performance statistics are not available.',
-        variant: 'destructive',
-      });
-      return;
-    }
+  // تقرير الأداء
+  const generatePerformanceReport = () => {
+    if (!performanceStats) return;
 
-    try {
-      const currentDate = new Date();
-      const report = {
-        title: `Performance Report - ${plan.planName}`,
-        generatedAt: Timestamp.now(),
-        planId: plan.id,
-        planName: plan.planName,
-        dateRange: {
-          start: currentDate,
-          end: currentDate,
-        },
-        stats: performanceStats,
-        recommendations: generateRecommendations(performanceStats),
-        generatedBy: 'current_user',
-        totalTasks: tasks.length,
-        completedTasks: tasks.filter(t => t.status === 'Completed').length,
-        progress: calculateProgress(),
-      };
+    const report = {
+      planName: plan.planName,
+      generatedAt: new Date().toISOString(),
+      stats: performanceStats,
+      tasks: tasks.map(task => ({
+        id: task.id,
+        description: task.taskDescription,
+        status: task.status,
+        completedAt: task.completedAt?.toDate().toISOString(),
+        duration: task.timer?.totalDuration || 0,
+        cost: task.cost || 0,
+        quality: task.qualityRating || 0,
+      })),
+    };
 
-      await addDoc(collection(db, 'performance_reports'), report);
-      
-      toast({
-        title: 'Report Generated Successfully',
-        description: `Performance report for ${plan.planName} has been created and saved.`,
-      });
-    } catch (error) {
-      console.error('Generate report error:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to generate performance report.',
-        variant: 'destructive',
-      });
-    }
+    console.log('Performance Report:', report);
+    toast({
+      title: 'Report Generated',
+      description: 'Performance report generated successfully',
+    });
   };
-
-  // توليد التوصيات
-  const generateRecommendations = (stats: PerformanceStats): string[] => {
-    const recommendations: string[] = [];
-    
-    if (stats.overdueTasks > 0) {
-      recommendations.push(`${stats.overdueTasks} tasks are overdue. Consider reviewing task scheduling.`);
-    }
-    
-    if (stats.averageQualityRating < 3) {
-      recommendations.push('Quality ratings are below average. Additional training may be needed.');
-    }
-    
-    if (stats.averageCompletionTime > 120) {
-      recommendations.push('Tasks are taking longer than expected. Review resource allocation.');
-    }
-    
-    return recommendations;
-  };
-
-  const headers = getColumnHeaders();
-  const progress = calculateProgress();
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <span className="ml-2">Loading Advanced Checklist...</span>
+        <RefreshCw className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
+  const headers = tasks.length > 0 
+    ? Array.from(new Set(tasks.map(t => t.dueDate?.toDate().toLocaleDateString() || 'No Date')))
+    : ['No Tasks'];
+
   return (
     <div className="space-y-6 h-full flex flex-col">
-      {/* شريط الإحصائيات والتقدم */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <CheckCircle className="h-4 w-4" />
-              Completion Rate
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{progress}%</div>
-            <Progress value={progress} className="mt-2" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              Avg. Time
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {performanceStats ? Math.round(performanceStats.averageCompletionTime) : 0}m
+      {/* إحصائيات الأداء */}
+      {performanceStats && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <Card className="p-4">
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              <div>
+                <p className="text-sm text-gray-600">Total Tasks</p>
+                <p className="text-2xl font-bold">{performanceStats.totalTasks}</p>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Per task</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Star className="h-4 w-4" />
-              Quality Rating
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {performanceStats ? performanceStats.averageQualityRating.toFixed(1) : 0}
+          </Card>
+          <Card className="p-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="text-sm text-gray-600">Completed</p>
+                <p className="text-2xl font-bold">{performanceStats.completedTasks}</p>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Average stars</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              Overdue Tasks
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {performanceStats ? performanceStats.overdueTasks : 0}
+          </Card>
+          <Card className="p-4">
+            <div className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-blue-600" />
+              <div>
+                <p className="text-sm text-gray-600">In Progress</p>
+                <p className="text-2xl font-bold">{performanceStats.inProgressTasks}</p>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Need attention</p>
-          </CardContent>
-        </Card>
-      </div>
+          </Card>
+          <Card className="p-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-purple-600" />
+              <div>
+                <p className="text-sm text-gray-600">Completion Rate</p>
+                <p className="text-2xl font-bold">{performanceStats.completionRate.toFixed(1)}%</p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-4">
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="text-sm text-gray-600">Total Cost</p>
+                <p className="text-2xl font-bold">${performanceStats.totalCost.toFixed(2)}</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* شريط التقدم */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-lg font-semibold">Overall Progress</h3>
+            <span className="text-sm text-gray-600">
+              {performanceStats?.completedTasks || 0} of {performanceStats?.totalTasks || 0} tasks completed
+            </span>
+          </div>
+          <Progress 
+            value={performanceStats?.completionRate || 0} 
+            className="w-full h-2" 
+          />
+        </CardContent>
+      </Card>
 
       {/* أزرار الإجراءات */}
       <div className="flex justify-between items-center">
@@ -791,6 +860,29 @@ export function MaintenanceChecklist({ plan }: Props) {
             <FileText className="h-4 w-4" />
             Generate Performance Report
           </Button>
+          
+          <PDFDownloadLink
+            document={
+              <MaintenancePeriodReportPDF 
+                tasks={tasks}
+                planName={plan.planName}
+                assetName={plan.assetName}
+                periodLabel={`${plan.scheduleType} - ${new Date().toLocaleDateString()}`}
+              />
+            }
+            fileName={`Maintenance-Period-Report-${plan.planName.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`}
+          >
+            {({ loading }) => (
+              <Button
+                variant="outline"
+                disabled={loading}
+                className="flex items-center gap-2 bg-green-50 hover:bg-green-100 border-green-200 text-green-700 hover:text-green-800"
+              >
+                <FileText className="h-4 w-4" />
+                {loading ? 'Generating...' : 'Download Period Report'}
+              </Button>
+            )}
+          </PDFDownloadLink>
         </div>
         <Badge variant="outline" className="px-3 py-1">
           {tasks.filter(t => t.status === 'Completed').length} / {tasks.length} Tasks
@@ -807,172 +899,78 @@ export function MaintenanceChecklist({ plan }: Props) {
               </TableHead>
               {headers.map((h, i) => (
                 <TableHead key={i} className="text-center whitespace-nowrap min-w-[250px]">
-                  {typeof h === 'string' ? h : `${h.day} ${h.date}`}
+                  {h}
                 </TableHead>
               ))}
             </TableRow>
           </TableHeader>
-
           <TableBody>
-            {(plan.tasks || []).map((desc, r) => (
-              <TableRow key={r}>
-                <TableCell className="sticky left-0 z-10 w-[300px] max-w-[300px] bg-background">
-                  <div className="max-h-32 overflow-y-auto whitespace-pre-wrap break-all p-2">
-                    <div className="font-medium">{desc}</div>
+            {tasks.map((task) => (
+              <TableRow key={task.id} className="hover:bg-gray-50">
+                <TableCell className="sticky left-0 z-10 bg-background border-r">
+                  <div className="space-y-2">
+                    <div className="font-medium text-sm">{task.taskDescription}</div>
+                    <div className="flex flex-wrap gap-1">
+                      <TaskStatusBadge status={task.status} />
+                      <PriorityBadge priority={task.priority} />
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {task.assignedToName && `Assigned to: ${task.assignedToName}`}
+                    </div>
                   </div>
                 </TableCell>
-
-                {headers.map((_, c) => {
-                  const task = findTaskForTimeSlot(desc, c);
-                  return (
-                    <TableCell key={c} className="text-center p-2">
-                      {task ? (
-                        <Card className="w-full min-w-[230px]">
-                          <CardContent className="p-4 space-y-3">
-                            {/* معلومات المهمة الأساسية */}
-                            <div className="flex justify-between items-start">
-                              <TaskStatusBadge status={task.status} />
-                              <PriorityBadge priority={task.priority} />
-                            </div>
-
-                            {/* أزرار التحكم في الحالة */}
-                            <div className="flex justify-center gap-1">
-                              <Button
-                                size="sm"
-                                variant={task.status === 'In Progress' ? 'default' : 'outline'}
-                                onClick={() => handleStatusUpdate(task, 'In Progress')}
-                                className="h-8 w-8 p-0"
-                                title="Start Task"
-                              >
-                                <PlayCircle className="h-4 w-4" />
-                              </Button>
-
-                              <Button
-                                size="sm"
-                                variant={task.status === 'Completed' ? 'default' : 'outline'}
-                                onClick={() => handleStatusUpdate(task, 'Completed')}
-                                className="h-8 w-8 p-0"
-                                title="Complete Task"
-                              >
-                                <CheckCircle2 className="h-4 w-4" />
-                              </Button>
-
-                              <Button
-                                size="sm"
-                                variant={task.status === 'Needs Review' ? 'default' : 'outline'}
-                                onClick={() => handleStatusUpdate(task, 'Needs Review')}
-                                className="h-8 w-8 p-0"
-                                title="Needs Review"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-
-                              <Button
-                                size="sm"
-                                variant={task.status === 'Skipped' ? 'destructive' : 'outline'}
-                                onClick={() => handleStatusUpdate(task, 'Skipped')}
-                                className="h-8 w-8 p-0"
-                                title="Skip Task"
-                              >
-                                <XCircle className="h-4 w-4" />
-                              </Button>
-                            </div>
-
-                            {/* مؤقت المهمة */}
-                            <TaskTimerComponent
-                              timer={task.timer}
-                              onTimerUpdate={(timer) => handleTimerUpdate(task, timer)}
-                              taskId={task.id}
-                            />
-
-                            {/* تقييم الجودة */}
-                            {task.status === 'Completed' && (
-                              <div className="space-y-1">
-                                <Label className="text-xs">Quality Rating:</Label>
-                                <StarRating
-                                  rating={task.qualityRating || 0}
-                                  onRatingChange={(rating) => handleQualityRatingUpdate(task, rating)}
-                                />
-                              </div>
-                            )}
-
-                            {/* معلومات إضافية */}
-                            <div className="space-y-2">
-                              {task.assignedToName && (
-                                <Badge variant="secondary" className="text-xs">
-                                  👤 {task.assignedToName}
-                                </Badge>
-                              )}
-                              {task.estimatedDuration && (
-                                <Badge variant="secondary" className="text-xs">
-                                  ⏱️ {task.estimatedDuration}m est.
-                                </Badge>
-                              )}
-                              {task.cost && (
-                                <Badge variant="secondary" className="text-xs">
-                                  💰 ${task.cost}
-                                </Badge>
-                              )}
-                            </div>
-
-                            {/* أزرار إضافية */}
-                            <div className="flex justify-center gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setSelectedTask(task);
-                                  setShowTaskDetails(true);
-                                }}
-                                className="h-7 w-7 p-0"
-                                title="View Details"
-                              >
-                                <MessageSquare className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0"
-                                title="Attach Image"
-                              >
-                                <Camera className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0"
-                                title="Upload File"
-                              >
-                                <Upload className="h-3 w-3" />
-                              </Button>
-                            </div>
-
-                            {/* مؤشرات إضافية */}
-                            <div className="flex justify-center gap-1 flex-wrap">
-                              {task.notes.length > 0 && (
-                                <Badge variant="outline" className="text-xs">
-                                  📝 {task.notes.length}
-                                </Badge>
-                              )}
-                              {task.attachments && task.attachments.length > 0 && (
-                                <Badge variant="outline" className="text-xs">
-                                  📎 {task.attachments.length}
-                                </Badge>
-                              )}
-                              {task.timer.totalDuration > 0 && (
-                                <Badge variant="outline" className="text-xs">
-                                  ⏱️ {Math.floor(task.timer.totalDuration / 60)}h {task.timer.totalDuration % 60}m
-                                </Badge>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </TableCell>
-                  );
-                })}
+                <TableCell className="text-center">
+                  <div className="space-y-3">
+                    <div className="flex justify-center">
+                      <TaskTimer 
+                        task={task}
+                        onUpdateTimer={handleTimerUpdate}
+                      />
+                    </div>
+                    <div className="flex justify-center gap-1">
+                      <Button
+                        size="sm"
+                        variant={task.status === 'Pending' ? 'default' : 'outline'}
+                        onClick={() => updateTaskStatus(task, 'Pending')}
+                      >
+                        <Clock className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={task.status === 'In Progress' ? 'default' : 'outline'}
+                        onClick={() => updateTaskStatus(task, 'In Progress')}
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={task.status === 'Completed' ? 'default' : 'outline'}
+                        onClick={() => updateTaskStatus(task, 'Completed')}
+                      >
+                        <CheckCircle className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="flex justify-center gap-1"></div>
+                    <div className="flex justify-center">
+                      <StarRating
+                        rating={task.qualityRating || 0}
+                        onRatingChange={(rating) => handleQualityRatingUpdate(task, rating)}
+                      />
+                    </div>
+                    <div className="flex justify-center">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedTask(task);
+                          setShowTaskDetails(true);
+                        }}
+                      >
+                        <Info className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -1067,9 +1065,9 @@ export function MaintenanceChecklist({ plan }: Props) {
                   </p>
                 </div>
                 <div>
-                  <Label>Completed By</Label>
+                  <Label>Reviewed By</Label> {/* 🔥 FIXED: Changed from "Completed By" to "Reviewed By" */}
                   <p className="mt-1 p-2 border rounded-md bg-gray-50">
-                    {selectedTask.completedBy || 'Not completed'}
+                    {selectedTask.completedBy || 'Not reviewed'} {/* 🔥 FIXED: Changed from "Not completed" to "Not reviewed" */}
                   </p>
                 </div>
                 <div>
@@ -1080,77 +1078,44 @@ export function MaintenanceChecklist({ plan }: Props) {
                 </div>
               </div>
 
-              {/* الملاحظات */}
+              {/* ملاحظات المهمة */}
               <div className="space-y-4">
-                <Label className="text-base font-semibold">Task Notes</Label>
-                
-                {/* إضافة ملاحظة جديدة */}
-                <div className="space-y-2">
-                  <Textarea 
-                    placeholder="Add a detailed note about this task..." 
+                <div>
+                  <Label>Task Notes</Label>
+                  <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                    {selectedTask.notes && selectedTask.notes.length > 0 ? (
+                      selectedTask.notes.map((note, index) => (
+                        <div key={index} className="p-2 bg-gray-50 rounded-md text-sm">
+                          <p>{note.text}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {note.createdAt?.toDate().toLocaleString()} by {note.createdBy}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-sm">No notes available</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Add a new note..."
                     value={newNote}
                     onChange={(e) => setNewNote(e.target.value)}
-                    className="min-h-[80px]"
+                    className="flex-1"
                   />
-                  <Button 
-                    onClick={handleAddNote} 
-                    size="sm" 
-                    disabled={!newNote.trim()}
-                    className="flex items-center gap-2"
+                  <Button
+                    onClick={() => {
+                      if (newNote.trim()) {
+                        addTaskNote(selectedTask, newNote);
+                        setNewNote('');
+                      }
+                    }}
+                    size="sm"
                   >
-                    <Save className="h-4 w-4" />
-                    Add Note
+                    <Plus className="h-4 w-4" />
                   </Button>
-                </div>
-                
-                {/* الملاحظات الموجودة */}
-                {selectedTask.notes.length > 0 && (
-                  <div className="space-y-2">
-                    <Label>Previous Notes ({selectedTask.notes.length}):</Label>
-                    <div className="max-h-60 overflow-y-auto space-y-2">
-                      {selectedTask.notes.map((note) => (
-                        <Card key={note.id}>
-                          <CardContent className="p-3">
-                            <p className="text-sm whitespace-pre-wrap">{note.text}</p>
-                            <div className="flex justify-between text-xs text-gray-500 mt-2">
-                              <span>👤 {note.createdBy}</span>
-                              <span>🕐 {note.createdAt.toDate().toLocaleString()}</span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* تغيير حالة المهمة */}
-              <div className="space-y-3">
-                <Label className="text-base font-semibold">Change Task Status</Label>
-                <div className="flex flex-wrap gap-2">
-                  {(['Pending', 'In Progress', 'Completed', 'Partially Done', 'Needs Review', 'Skipped', 'Failed'] as TaskStatus[]).map((status) => (
-                    <Button
-                      key={status}
-                      size="sm"
-                      variant={selectedTask.status === status ? 'default' : 'outline'}
-                      onClick={() => handleStatusUpdate(selectedTask, status)}
-                      className="flex items-center gap-2"
-                    >
-                      {status}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* معلومات التتبع */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
-                <div>
-                  <Label className="text-sm text-gray-500">Created</Label>
-                  <p className="text-sm">{selectedTask.createdAt.toDate().toLocaleString()}</p>
-                </div>
-                <div>
-                  <Label className="text-sm text-gray-500">Last Modified</Label>
-                  <p className="text-sm">{selectedTask.lastModified.toDate().toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -1178,7 +1143,6 @@ export function MaintenanceChecklist({ plan }: Props) {
             <Button variant="outline" onClick={() => setShowTaskDetails(false)}>
               Close
             </Button>
-            
           </DialogFooter>
         </DialogContent>
       </Dialog>

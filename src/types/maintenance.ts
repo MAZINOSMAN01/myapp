@@ -127,6 +127,7 @@ export interface NewMaintenancePlan {
 
 /** خطة صيانة محفوظة بالفعل */
 export interface MaintenancePlan extends NewMaintenancePlan {
+  scheduleType: any
   id: string
   completed?: boolean
   
@@ -206,6 +207,7 @@ export interface CalendarFilters {
 
 /** إحصائيات الأداء */
 export interface PerformanceStats {
+  completionRate: any
   totalTasks: number
   completedTasks: number
   pendingTasks: number

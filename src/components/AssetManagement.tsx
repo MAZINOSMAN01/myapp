@@ -55,17 +55,15 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
-import { Plus, Edit, Trash2, ChevronsUpDown } from 'lucide-react'
+// 🔥 NEW: Added Wand2 icon for auto-generate button
+import { Plus, Edit, Trash2, ChevronsUpDown, Wand2 } from 'lucide-react'
 
-/* ---------- الأنواع الموحدة + حوار تعديل الموقع ---------- */
 import type { SystemAsset, AssetType } from '@/types/maintenance'
 import type { SpaceLocation } from '@/types/space-management'
 import { EditAssetDialog } from '@/components/EditAssetDialog'
 
-/* alias محلّى ليبقى الاسم Asset فى الكود */
 type Asset = SystemAsset
 
-/* ---------------- Combobox صغير ---------------- */
 const Combobox = ({
   options,
   value,
@@ -113,7 +111,6 @@ const Combobox = ({
 }
 
 export function AssetManagement() {
-  /* ---------------- الحالة ---------------- */
   const [assets, setAssets] = useState<Asset[]>([])
   const [spaces, setSpaces] = useState<SpaceLocation[]>([])
   const [filterSystem, setFilterSystem] = useState('all')
@@ -126,7 +123,6 @@ export function AssetManagement() {
   const [editingType, setEditingType] = useState<AssetType | null>(null)
   const [itemToDelete, setItemToDelete] = useState<{ asset: Asset; type: AssetType } | null>(null)
 
-  /* حقول النموذج */
   const [assetName, setAssetName] = useState('')
   const [assetType, setAssetType] = useState('')
   const [assetLocation, setAssetLocation] = useState('')
@@ -136,7 +132,59 @@ export function AssetManagement() {
 
   const { toast } = useToast()
 
-  /* ------------- تحميل الأصول من Firestore ------------- */
+  // 🔥 NEW: Auto-increment label generation function
+  const generateNextLabel = () => {
+    if (!assetType || !assetName) return ''
+    
+    // Find current asset or create new one
+    const currentAsset = assets.find(a => a.name === assetName)
+    if (!currentAsset) return `${assetType} 1`
+    
+    // Find all similar types in the system
+    const similarTypes = currentAsset.types.filter(t => t.name === assetType)
+    
+    if (similarTypes.length === 0) return `${assetType} 1`
+    
+    // Extract numbers from existing labels
+    const numbers = similarTypes
+      .map(t => t.label || '')
+      .map(label => {
+        const match = label.match(/(\d+)$/)
+        return match ? parseInt(match[1]) : 0
+      })
+      .filter(num => num > 0)
+    
+    // Find max number and add 1
+    const maxNumber = numbers.length > 0 ? Math.max(...numbers) : 0
+    return `${assetType} ${maxNumber + 1}`
+  }
+
+  // 🔥 NEW: Handle asset type change with auto-clear label
+  const handleAssetTypeChange = (value: string) => {
+    setAssetType(value)
+    // Clear label when type changes to allow auto-generation
+    setAssetLabel('')
+  }
+
+  // 🔥 NEW: Handle asset name change with auto-clear label
+  const handleAssetNameChange = (value: string) => {
+    setAssetName(value)
+    // Clear label when system changes to allow auto-generation
+    if (assetType) {
+      setAssetLabel('')
+    }
+  }
+
+  // 🔥 NEW: Auto-generate label when type changes
+  useEffect(() => {
+    if (assetType && assetName && !assetLabel) {
+      const nextLabel = generateNextLabel()
+      if (nextLabel) {
+        setAssetLabel(nextLabel)
+      }
+    }
+  }, [assetType, assetName, assets])
+
   const loadAssets = async () => {
     try {
       const snap = await getDocs(collection(db, 'assets'))
@@ -145,8 +193,8 @@ export function AssetManagement() {
         return {
           id: d.id,
           name: data.name,
-           location: data.location,
-           spaceId: data.spaceId,
+          location: data.location,
+          spaceId: data.spaceId,
           types: (data.types || []) as AssetType[],
         } as Asset
       })
@@ -156,8 +204,9 @@ export function AssetManagement() {
       toast({ title: 'Error', description: 'Failed loading assets.', variant: 'destructive' })
     }
   }
+
   useEffect(() => {
-  loadAssets()
+    loadAssets()
     getDocs(collection(db, 'space_locations'))
       .then((snap) => {
         setSpaces(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as SpaceLocation[])
@@ -168,7 +217,6 @@ export function AssetManagement() {
       })
   }, [])
 
-  /* ------------- فتح الحوارات ------------- */
   const openAddAsset = () => {
     setDialogMode('add')
     setEditingAsset(null)
@@ -208,7 +256,6 @@ export function AssetManagement() {
     setIsDialogOpen(true)
   }
 
-  /* ------------- حفظ / تحديث ------------- */
   const handleSave = async () => {
     const name = assetName.trim()
     const type = assetType.trim()
@@ -223,15 +270,13 @@ export function AssetManagement() {
     }
 
     try {
-      /* تعديل نوع */
       if (dialogMode === 'editType' && editingAsset && editingType) {
         const newTypes = editingAsset.types.map((t) =>
-           t.name === editingType.name ? { name: type, location, spaceId, label, quantity } : t,
+          t.name === editingType.name ? { name: type, location, spaceId, label, quantity } : t,
         )
         await updateDoc(doc(db, 'assets', editingAsset.id), { name, types: newTypes })
         toast({ description: 'Type updated.' })
       }
-      /* إضافة نوع لنظام قائم */
       else if (dialogMode === 'addType' && editingAsset) {
         const dup = editingAsset.types.some((t) => t.name === type && t.location === location && t.label === label)
         if (dup) {
@@ -243,7 +288,6 @@ export function AssetManagement() {
         })
         toast({ description: 'Type added.' })
       }
-      /* نظام جديد */
       else {
         const existing = assets.find((a) => a.name === name)
         if (existing) {
@@ -273,7 +317,6 @@ export function AssetManagement() {
     }
   }
 
-  /* ------------- حذف ------------- */
   const confirmDelete = async () => {
     if (!itemToDelete) return
     const { asset, type } = itemToDelete
@@ -297,7 +340,6 @@ export function AssetManagement() {
     }
   }
 
-  /* ------------- خيارات البحث / الفلترة ------------- */
   const displayed = useMemo(
     () =>
       assets
@@ -309,9 +351,22 @@ export function AssetManagement() {
   )
 
   const systemOptions = useMemo(() => Array.from(new Set(assets.map((a) => a.name))), [assets])
+  
+  // 🔥 NEW: Type options for selected system - shows previously used types
+  const typeOptions = useMemo(() => {
+    if (!assetName) return []
+    const currentAsset = assets.find(a => a.name === assetName)
+    if (!currentAsset) return []
+    
+    // Get all unique types from selected system
+    const uniqueTypes = Array.from(new Set(currentAsset.types.map(t => t.name)))
+    return uniqueTypes
+  }, [assets, assetName])
+  
   const locationOptions = useMemo(() => {
     return Array.from(new Set(spaces.map((s) => s.displayName))).sort()
   }, [spaces])
+  
   const locationFilterOptions = useMemo(() => {
     const locations = new Set(['all'])
     assets.forEach((a) => {
@@ -322,12 +377,10 @@ export function AssetManagement() {
     return Array.from(locations).sort()
   }, [assets])
 
-  /* ------------- الواجهة ------------- */
   return (
     <div className="space-y-6">
-      {/* رأس الصفحة */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Asset &amp; System Management</h2>
+        <h2 className="text-2xl font-bold">Asset & System Management</h2>
 
         <div className="flex items-center gap-2">
           <Input
@@ -371,7 +424,6 @@ export function AssetManagement() {
         </Button>
       </div>
 
-      {/* حوار إضافة / تعديل */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -390,14 +442,20 @@ export function AssetManagement() {
               <Combobox
                 options={systemOptions}
                 value={assetName}
-                onSelect={setAssetName}
+                onSelect={handleAssetNameChange}
                 placeholder="Select or add a system…"
               />
             </div>
 
             <div>
               <Label>Type</Label>
-              <Input value={assetType} onChange={(e) => setAssetType(e.target.value)} placeholder="Enter type…" />
+              {/* 🔥 NEW: Changed to Combobox with type suggestions */}
+              <Combobox
+                options={typeOptions}
+                value={assetType}
+                onSelect={handleAssetTypeChange}
+                placeholder="Select or add a type…"
+              />
             </div>
 
             <div>
@@ -416,11 +474,26 @@ export function AssetManagement() {
 
             <div>
               <Label>Label (optional)</Label>
-              <Input 
-                value={assetLabel} 
-                onChange={(e) => setAssetLabel(e.target.value)} 
-                placeholder="e.g., Type 1, Type 2, etc." 
-              />
+              {/* 🔥 NEW: Added wand button for auto-generation */}
+              <div className="flex gap-2">
+                <Input 
+                  value={assetLabel} 
+                  onChange={(e) => setAssetLabel(e.target.value)} 
+                  placeholder="e.g., Switch 1, Switch 2, etc." 
+                  className="flex-1"
+                />
+                <Button 
+                  type="button"
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setAssetLabel(generateNextLabel())}
+                  disabled={!assetType || !assetName}
+                  className="px-3"
+                  title="Auto-generate next number"
+                >
+                  <Wand2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <div>
@@ -444,7 +517,6 @@ export function AssetManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* شبكة البطاقات */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {displayed.length ? (
           displayed.map((a, i) => (
@@ -478,7 +550,6 @@ export function AssetManagement() {
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                  {/* حوار تعديل موقع الأصل */}
                   <EditAssetDialog asset={a} />
                 </div>
               </CardHeader>
@@ -489,7 +560,6 @@ export function AssetManagement() {
         )}
       </div>
 
-      {/* حوار تأكيد الحذف */}
       <AlertDialog open={!!itemToDelete} onOpenChange={(o) => !o && setItemToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
