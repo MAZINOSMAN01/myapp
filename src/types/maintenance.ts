@@ -142,22 +142,107 @@ export interface MaintenancePlan extends NewMaintenancePlan {
    Asset & System-Management domain (إدارة الأنظمة/الأصول)
 ───────────────────────────────────────────────────────────*/
 
-/** نوع فردى داخل نظام واحد، مع موقع اختيارى */
+/** حالة الأصل */
+export type AssetCondition = 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Critical'
+
+/** حالة التشغيل */
+export type OperationalStatus = 'Operational' | 'Under Maintenance' | 'Out of Service' | 'Retired'
+
+/** نوع فردى داخل نظام واحد مع تفاصيل مهنية محسّنة */
 export interface AssetType {
+  // الخصائص الأساسية
   spaceId: string
   name: string
   location?: string
   label?: string      // تسمية فرعية للنوع (Type 1, Type 2, etc.)
   quantity?: number   // كمية هذا النوع
+  
+  // تفاصيل مهنية محسّنة
+  condition: AssetCondition           // حالة الأصل
+  operationalStatus: OperationalStatus // حالة التشغيل
+  manufacturer?: string               // الشركة المصنعة
+  model?: string                     // رقم الموديل
+  serialNumber?: string              // الرقم التسلسلي
+  purchaseDate?: Timestamp           // تاريخ الشراء
+  installationDate?: Timestamp       // تاريخ التركيب
+  warrantyExpiry?: Timestamp         // انتهاء الضمان
+  purchaseCost?: number             // تكلفة الشراء
+  currentValue?: number             // القيمة الحالية
+  
+  // معلومات التشغيل والصيانة
+  lastMaintenanceDate?: Timestamp    // آخر صيانة
+  nextMaintenanceDate?: Timestamp    // الصيانة القادمة
+  maintenanceInterval?: number       // فترة الصيانة (بالأيام)
+  totalMaintenanceCost?: number      // إجمالي تكلفة الصيانة
+  downtimeHours?: number            // ساعات التوقف
+  
+  // معلومات تقنية
+  specifications?: Record<string, string> // المواصفات التقنية
+  operatingHours?: number           // ساعات التشغيل
+  energyRating?: string            // تصنيف الطاقة
+  safetyRating?: string           // تصنيف السلامة
+  
+  // معلومات إضافية
+  supplier?: string               // المورد
+  department?: string            // القسم المسؤول
+  responsiblePerson?: string     // الشخص المسؤول
+  notes?: string                // ملاحظات إضافية
+  tags?: string[]              // تصنيفات/علامات
+  
+  // تواريخ التتبع
+  createdAt?: Timestamp
+  updatedAt?: Timestamp
+  createdBy?: string
+  updatedBy?: string
 }
 
-/** نظام (Asset) يضمّ مجموعة أنواع */
+/** نظام (Asset) محسّن يضمّ مجموعة أنواع مع تفاصيل مهنية */
 export interface SystemAsset {
+  // الخصائص الأساسية
   spaceId: string
   id: string
   name: string
   location?: string              // موقع افتراضى للنظام ككلّ (اختياري)
   types: AssetType[]
+  
+  // تفاصيل النظام المهنية
+  category?: string              // فئة النظام (HVAC, Electrical, etc.)
+  systemCode?: string           // رمز النظام
+  description?: string          // وصف النظام
+  priority?: Priority          // أولوية النظام
+  
+  // معلومات التشغيل
+  overallCondition?: AssetCondition    // الحالة العامة للنظام
+  systemStatus?: OperationalStatus     // حالة النظام العامة
+  commissioning?: Timestamp            // تاريخ التشغيل
+  lastInspection?: Timestamp           // آخر فحص
+  nextInspection?: Timestamp           // الفحص القادم
+  
+  // معلومات مالية
+  totalSystemValue?: number            // القيمة الإجمالية للنظام
+  annualMaintenanceBudget?: number     // ميزانية الصيانة السنوية
+  
+  // معلومات المسؤولية
+  systemManager?: string               // مدير النظام
+  maintenanceTeam?: string[]          // فريق الصيانة
+  department?: string                 // القسم المسؤول
+  
+  // معلومات أمان ومخاطر
+  riskLevel?: 'Low' | 'Medium' | 'High' | 'Critical'  // مستوى المخاطر
+  safetyRequirements?: string[]       // متطلبات السلامة
+  emergencyProcedures?: string        // إجراءات الطوارئ
+  
+  // وثائق ومرفقات
+  manuals?: string[]                  // أدلة التشغيل (URLs)
+  drawings?: string[]                 // رسوم هندسية (URLs)
+  certificates?: string[]             // شهادات (URLs)
+  
+  // تتبع التحديثات
+  createdAt?: Timestamp
+  updatedAt?: Timestamp
+  createdBy?: string
+  updatedBy?: string
+  version?: number                    // إصدار البيانات للتتبع
 }
 
 /** اسم مستعار لتوافق المكوّنات القديمة التى تستورد `Asset` */

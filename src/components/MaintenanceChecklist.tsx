@@ -14,7 +14,8 @@ import {
   where,
   addDoc,
   writeBatch,
-  orderBy, // 🔥 FIXED: Added orderBy import
+  orderBy,
+  getDocs, // Added getDocs import
 } from 'firebase/firestore';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Table, 
   TableBody, 
@@ -59,278 +61,19 @@ import {
   FileText, 
   DollarSign, 
   User, 
-  Calendar, 
-  MessageSquare,
   Star,
-  StarOff,
-  Timer,
-  Target,
   TrendingUp,
   Activity,
-  Award,
-  Users,
   Save,
   Plus,
-  Minus,
   RefreshCw,
-  Settings,
   Info,
-  CheckSquare,
-  Square as SquareIcon,
   AlertTriangle,
   XCircle,
-  Zap,
-  Shield,
-  Wrench,
-  Cog,
-  Settings as SettingsIcon,
-  Database,
-  HardDrive,
-  Monitor,
-  Server,
-  Cpu,
-  Memory,
-  Bluetooth,
-  Wifi,
-  Power,
-  Battery,
-  Plug,
-  Lightbulb,
-  Flame,
-  Droplets,
-  Wind,
-  Thermometer,
-  Gauge,
-  Speedometer,
-  BarChart,
-  PieChart,
-  LineChart,
-  TrendingDown,
   ArrowUp,
   ArrowDown,
-  ArrowLeft,
   ArrowRight,
-  ChevronUp,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  MoreHorizontal,
-  MoreVertical,
-  Filter,
-  Sort,
-  Search,
-  Download,
-  Upload,
-  Share,
-  Copy,
-  Trash,
-  Edit,
-  Eye,
-  EyeOff,
-  Lock,
-  Unlock,
-  Home,
-  Building,
-  MapPin,
-  Navigation,
-  Compass,
-  Map,
-  Globe,
-  Phone,
-  Mail,
-  MessageCircle,
-  Send,
-  Inbox,
-  Outbox,
-  Archive,
-  Folder,
-  File,
-  Image,
-  Video,
-  Music,
-  Headphones,
-  Speaker,
-  Mic,
-  Camera,
-  Printer,
-  Scanner,
-  Keyboard,
-  Mouse,
-  Gamepad,
-  Joystick,
-  Controller,
-  Tv,
-  Radio,
-  Satellite,
-  Antenna,
-  Router,
-  Modem,
-  Hub,
-  Switch,
-  Cable,
-  Usb,
-  Ethernet,
-  Hdmi,
-  Sd,
-  Sim,
-  Chip,
-  Disc,
-  Dvd,
-  Cd,
-  Cassette,
-  Floppy,
-  Save as SaveIcon,
-  Folder as FolderIcon,
-  FolderOpen,
-  FolderClosed,
-  FilePlus,
-  FileMinus,
-  FileText as FileTextIcon,
-  FileImage,
-  FileVideo,
-  FileAudio,
-  FileCode,
-  FileSpreadsheet,
-  FileSlides,
-  FilePdf,
-  FileWord,
-  FileExcel,
-  FilePowerpoint,
-  FileZip,
-  FileArchive,
-  FileJson,
-  FileXml,
-  FileCsv,
-  FileMarkdown,
-  FileHtml,
-  FileCss,
-  FileJs,
-  FileTs,
-  FilePython,
-  FileJava,
-  FileCpp,
-  FilePhp,
-  FileRuby,
-  FileGo,
-  FileRust,
-  FileSwift,
-  FileKotlin,
-  FileDart,
-  FileScala,
-  FileHaskell,
-  FileClojure,
-  FileElixir,
-  FileErlang,
-  FilePerl,
-  FileLua,
-  FileShell,
-  FileBash,
-  FilePowershell,
-  FileDocker,
-  FileKubernetes,
-  FileYaml,
-  FileToml,
-  FileIni,
-  FileEnv,
-  FileLog,
-  FileConfig,
-  FileDatabase,
-  FileSql,
-  FileNoSql,
-  FileRedis,
-  FileMongodb,
-  FilePostgres,
-  FileMysql,
-  FileSqlite,
-  FileFirebase,
-  FileAws,
-  FileAzure,
-  FileGoogle,
-  FileGithub,
-  FileGitlab,
-  FileBitbucket,
-  FileJira,
-  FileSlack,
-  FileDiscord,
-  FileTelegram,
-  FileWhatsapp,
-  FileSkype,
-  FileZoom,
-  FileTeams,
-  FileMeet,
-  FileCalendar,
-  FileContact,
-  FileBookmark,
-  FileNote,
-  FileTask,
-  FileProject,
-  FileReport,
-  FileChart,
-  FileGraph,
-  FileStatistics,
-  FileAnalytics,
-  FileMetrics,
-  FileKpi,
-  FileDashboard,
-  FileWidget,
-  FileComponent,
-  FileModule,
-  FilePackage,
-  FileLibrary,
-  FileFramework,
-  FilePlugin,
-  FileExtension,
-  FileTheme,
-  FileTemplate,
-  FileLayout,
-  FileDesign,
-  FileArt,
-  FilePhoto,
-  FilePicture,
-  FileGraphic,
-  FileVector,
-  FileRaster,
-  FileSvg,
-  FilePng,
-  FileJpg,
-  FileGif,
-  FileWebp,
-  FileIco,
-  FileBmp,
-  FileTiff,
-  FileRaw,
-  FileEps,
-  FileAi,
-  FilePsd,
-  FileXd,
-  FileFigma,
-  FileSketch,
-  FileInvision,
-  FileMarvel,
-  FileZeplin,
-  FileAbstract,
-  FileFramer,
-  FilePrinciple,
-  FileOrigami,
-  FileFlinto,
-  FileProtopie,
-  FileAxure,
-  FileBalsamiq,
-  FileJustinmind,
-  FileUxpin,
-  FileInvision as FileInvisionIcon,
-  FileMarvel as FileMarvelIcon,
-  FileZeplin as FileZeplinIcon,
-  FileAbstract as FileAbstractIcon,
-  FileFramer as FileFramerIcon,
-  FilePrinciple as FilePrincipleIcon,
-  FileOrigami as FileOrigamiIcon,
-  FileFlinto as FileFlintoIcon,
-  FileProtopie as FileProtopieIcon,
-  FileAxure as FileAxureIcon,
-  FileBalsamiq as FileBalsamiqIcon,
-  FileJustinmind as FileJustinmindIcon,
-  FileUxpin as FileUxpinIcon
+  Minus
 } from 'lucide-react';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { MaintenanceReportPDF } from '@/components/MaintenanceReportPDF';
@@ -342,10 +85,28 @@ import type {
   AdvancedMaintenanceTask,
   TaskStatus,
   Priority,
-  MaintenanceNote,
-  PerformanceStats,
-  TimerState
+  TaskTimer
 } from '@/types/maintenance';
+
+// Define missing interfaces locally
+interface MaintenanceNote {
+  id: string;
+  text: string;
+  createdAt: any;
+  createdBy: string;
+}
+
+interface PerformanceStats {
+  totalTasks: number;
+  completedTasks: number;
+  inProgressTasks: number;
+  pendingTasks: number;
+  overdueTasks: number;
+  completionRate: number;
+  totalCost: number;
+  avgCompletionTime: number;
+  avgQualityRating: number;
+}
 
 interface Props {
   plan: MaintenancePlan;
@@ -378,9 +139,13 @@ const TaskTimer = ({
   onUpdateTimer 
 }: { 
   task: AdvancedMaintenanceTask;
-  onUpdateTimer: (task: AdvancedMaintenanceTask, timerState: TimerState) => void;
+  onUpdateTimer: (task: AdvancedMaintenanceTask, timerState: any) => void;
 }) => {
-  const [localTimer, setLocalTimer] = useState(task.timer);
+  const [localTimer, setLocalTimer] = useState({
+    ...task.timer,
+    isRunning: false,
+    isPaused: false
+  });
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -465,16 +230,17 @@ const TaskTimer = ({
 
 // مكون شارة الحالة
 const TaskStatusBadge = ({ status }: { status: TaskStatus }) => {
-  const variants = {
+  const variants: Record<string, any> = {
     Pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: Clock },
     'In Progress': { bg: 'bg-blue-100', text: 'text-blue-800', icon: RefreshCw },
     Completed: { bg: 'bg-green-100', text: 'text-green-800', icon: CheckCircle },
-    Cancelled: { bg: 'bg-red-100', text: 'text-red-800', icon: XCircle },
-    Overdue: { bg: 'bg-red-100', text: 'text-red-800', icon: AlertTriangle },
-    Skipped: { bg: 'bg-gray-100', text: 'text-gray-800', icon: ArrowRight }
+    'Partially Done': { bg: 'bg-orange-100', text: 'text-orange-800', icon: Minus },
+    'Needs Review': { bg: 'bg-purple-100', text: 'text-purple-800', icon: AlertCircle },
+    Skipped: { bg: 'bg-gray-100', text: 'text-gray-800', icon: ArrowRight },
+    Failed: { bg: 'bg-red-100', text: 'text-red-800', icon: XCircle }
   };
 
-  const variant = variants[status];
+  const variant = variants[status] || variants.Pending;
   const Icon = variant.icon;
 
   return (
@@ -514,7 +280,49 @@ export function MaintenanceChecklist({ plan }: Props) {
   const [newNote, setNewNote] = useState('');
   const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('');
+  const [users, setUsers] = useState<any[]>([]);
   const { toast } = useToast();
+  
+  // Load users for assignment
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'users'));
+        const usersList = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setUsers(usersList);
+      } catch (error) {
+        console.error('Error loading users:', error);
+      }
+    };
+    loadUsers();
+  }, []);
+
+  // Update task assignment
+  const updateTaskAssignment = async (task: AdvancedMaintenanceTask, userId: string, userName: string) => {
+    try {
+      await updateDoc(doc(db, 'maintenance_tasks', task.id), {
+        assignedTo: userId,
+        assignedToName: userName,
+        lastModified: Timestamp.now(),
+      });
+      
+      toast({
+        title: 'Assignment Updated',
+        description: `Task assigned to ${userName}`,
+      });
+    } catch (error) {
+      console.error('Assignment update failed:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update task assignment',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // استعلام المهام من قاعدة البيانات
   useEffect(() => {
     if (!plan?.id) return;
@@ -591,7 +399,7 @@ export function MaintenanceChecklist({ plan }: Props) {
       const completed = tasks.filter(t => t.status === 'Completed').length;
       const inProgress = tasks.filter(t => t.status === 'In Progress').length;
       const pending = tasks.filter(t => t.status === 'Pending').length;
-      const overdue = tasks.filter(t => t.status === 'Overdue').length;
+      const overdue = tasks.filter(t => t.status === 'Failed').length; // Use 'Failed' instead of 'Overdue'
       
       const totalCost = tasks.reduce((sum, task) => sum + (task.cost || 0), 0);
       const totalTime = tasks.reduce((sum, task) => sum + (task.timer?.totalDuration || 0), 0);
@@ -665,10 +473,14 @@ export function MaintenanceChecklist({ plan }: Props) {
   };
 
   // تحديث العداد
-  const handleTimerUpdate = async (task: AdvancedMaintenanceTask, timerState: TimerState) => {
+  const handleTimerUpdate = async (task: AdvancedMaintenanceTask, timerState: any) => {
     try {
       await updateDoc(doc(db, 'maintenance_tasks', task.id), {
-        timer: timerState,
+        timer: {
+          totalDuration: timerState.totalDuration,
+          isPaused: timerState.isPaused,
+          pausedDuration: timerState.pausedDuration || 0
+        },
         lastModified: Timestamp.now(),
       });
     } catch (error) {
@@ -909,13 +721,48 @@ export function MaintenanceChecklist({ plan }: Props) {
               <TableRow key={task.id} className="hover:bg-gray-50">
                 <TableCell className="sticky left-0 z-10 bg-background border-r">
                   <div className="space-y-2">
-                    <div className="font-medium text-sm">{task.taskDescription}</div>
+                    {/* Display individual task as checkable item */}
+                    <div className="flex items-start gap-2">
+                      <Checkbox 
+                        checked={task.status === 'Completed'}
+                        onCheckedChange={(checked) => {
+                          updateTaskStatus(task, checked ? 'Completed' : 'Pending');
+                        }}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium text-sm">{task.taskDescription}</div>
+                      </div>
+                    </div>
                     <div className="flex flex-wrap gap-1">
                       <TaskStatusBadge status={task.status} />
                       <PriorityBadge priority={task.priority} />
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {task.assignedToName && `Assigned to: ${task.assignedToName}`}
+                    <div className="text-xs text-gray-500 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <User className="h-3 w-3" />
+                        <Select
+                          value={task.assignedTo || ''}
+                          onValueChange={(userId) => {
+                            const user = users.find(u => u.id === userId);
+                            if (user) {
+                              updateTaskAssignment(task, userId, user.name || user.email);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-6 text-xs w-auto min-w-[120px]">
+                            <SelectValue placeholder="Assign to..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">Unassigned</SelectItem>
+                            {users.map((user) => (
+                              <SelectItem key={user.id} value={user.id}>
+                                {user.name || user.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                 </TableCell>
@@ -1060,9 +907,29 @@ export function MaintenanceChecklist({ plan }: Props) {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label>Assigned To</Label>
-                  <p className="mt-1 p-2 border rounded-md bg-gray-50">
-                    {selectedTask.assignedToName || 'Not assigned'}
-                  </p>
+                  <div className="mt-1">
+                    <Select
+                      value={selectedTask.assignedTo || ''}
+                      onValueChange={(userId) => {
+                        const user = users.find(u => u.id === userId);
+                        if (user && selectedTask) {
+                          updateTaskAssignment(selectedTask, userId, user.name || user.email);
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select user to assign..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Unassigned</SelectItem>
+                        {users.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.name || user.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div>
                   <Label>Reviewed By</Label> {/* 🔥 FIXED: Changed from "Completed By" to "Reviewed By" */}

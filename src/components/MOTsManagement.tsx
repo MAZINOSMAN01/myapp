@@ -12,15 +12,38 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit, Trash2, Printer } from "lucide-react";
+import { Plus, Edit, Trash2, Printer, Save, Download } from "lucide-react";
 import { MOTPrintable } from './MOTPrintable';
+import { MOTReportPDF } from './MOTReportPDF';
+import { MOTAllReportPDF } from './MOTAllReportPDF';
+import { PDFDownloadLink } from '@react-pdf/renderer';
 
 interface MOT {
   id: string;
-  [key: string]: any;
+  workOrderNumber: string;
+  station: string;
+  technicianName: string;
+  totalCost: number;
+  issueDate: any;
+  status: 'Pending' | 'Completed' | 'Invoiced';
+  description: string;
+  invoiceNumber: string;
+  cargoWiseCw: string;
 }
 
-const initialFormState = {
+type FormState = {
+  workOrderNumber: string;
+  station: string;
+  technicianName: string;
+  totalCost: string;
+  issueDate: string;
+  status: 'Pending' | 'Completed' | 'Invoiced';
+  description: string;
+  invoiceNumber: string;
+  cargoWiseCw: string;
+};
+
+const initialFormState: FormState = {
     workOrderNumber: '', station: 'RUH', technicianName: '', totalCost: '', 
     issueDate: '', status: 'Pending', description: '', invoiceNumber: '', cargoWiseCw: ''
 };
@@ -30,7 +53,7 @@ export function MOTsManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingMot, setEditingMot] = useState<MOT | null>(null);
-  const [formState, setFormState] = useState(initialFormState);
+  const [formState, setFormState] = useState<FormState>(initialFormState);
   const [motToPrint, setMotToPrint] = useState<MOT | null>(null);
 
   const componentToPrintRef = useRef<HTMLDivElement>(null);
@@ -46,8 +69,30 @@ export function MOTsManagement() {
     setIsLoading(true);
     try {
       const querySnapshot = await getDocs(collection(db, "mots"));
-      const motsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MOT));
-      setMots(motsData);
+      const motsData = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          workOrderNumber: data.workOrderNumber || '',
+          station: data.station || 'RUH',
+          technicianName: data.technicianName || '',
+          totalCost: Number(data.totalCost) || 0,
+          issueDate: data.issueDate,
+          status: data.status || 'Pending',
+          description: data.description || '',
+          invoiceNumber: data.invoiceNumber || '',
+          cargoWiseCw: data.cargoWiseCw || '',
+        } as MOT;
+      });
+      
+      // Sort MOTs by work order number (ascending: 1, 2, 3, ...)
+      const sortedMots = motsData.sort((a, b) => {
+        const woA = parseInt(a.workOrderNumber) || 999999;
+        const woB = parseInt(b.workOrderNumber) || 999999;
+        return woA - woB; // Ascending order: 1, 2, 3, 4, ...
+      });
+      
+      setMots(sortedMots);
     } catch (error) { console.error("Error fetching MOTs:", error); } 
     finally { setIsLoading(false); }
   };
@@ -133,10 +178,27 @@ export function MOTsManagement() {
           <h1 className="text-3xl font-bold text-gray-900">Maintenance Order Tickets</h1>
           <p className="text-gray-500">Manage all MOTs and linked invoices.</p>
         </div>
-        <Button onClick={() => openForm()} className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="h-4 w-4 mr-2" />
-          Create New MOT
-        </Button>
+        <div className="flex gap-2">
+          <PDFDownloadLink
+            document={<MOTAllReportPDF mots={mots} />}
+            fileName={`All-MOTs-Report-${new Date().toISOString().split('T')[0]}.pdf`}
+          >
+            {({ loading }) => (
+              <Button 
+                variant="outline" 
+                disabled={loading || mots.length === 0}
+                className="bg-green-50 hover:bg-green-100 border-green-200"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {loading ? 'Generating...' : 'Download All MOTs PDF'}
+              </Button>
+            )}
+          </PDFDownloadLink>
+          <Button onClick={() => openForm()} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="h-4 w-4 mr-2" />
+            Create New MOT
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -153,9 +215,24 @@ export function MOTsManagement() {
               : mots.length > 0 ? ( mots.map((mot) => (
                   <TableRow key={mot.id}>
                     <TableCell>{mot.workOrderNumber}</TableCell><TableCell>{mot.description || 'N/A'}</TableCell><TableCell>{mot.technicianName}</TableCell><TableCell>{formatDate(mot.issueDate)}</TableCell><TableCell>{mot.invoiceNumber || 'N/A'}</TableCell><TableCell>{mot.cargoWiseCw || 'N/A'}</TableCell><TableCell className="text-right">${mot.totalCost.toLocaleString()}</TableCell><TableCell className="text-center"><Badge>{mot.status}</Badge></TableCell>
-                    <TableCell className="text-right space-x-2">
+                    <TableCell className="text-right space-x-1">
                         <Button variant="outline" size="sm" onClick={() => openForm(mot)}><Edit className="h-4 w-4"/></Button>
                         <Button variant="outline" size="sm" onClick={() => triggerPrint(mot)}><Printer className="h-4 w-4"/></Button>
+                        <PDFDownloadLink
+                          document={<MOTReportPDF mot={mot} />}
+                          fileName={`MOT-${mot.workOrderNumber}-Report.pdf`}
+                        >
+                          {({ loading }) => (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              disabled={loading}
+                              className="bg-green-50 hover:bg-green-100"
+                            >
+                              <Download className="h-4 w-4"/>
+                            </Button>
+                          )}
+                        </PDFDownloadLink>
                         <Button variant="destructive" size="sm" onClick={() => handleDelete(mot.id)}><Trash2 className="h-4 w-4"/></Button>
                     </TableCell>
                   </TableRow>
@@ -179,7 +256,7 @@ export function MOTsManagement() {
             <Input name="totalCost" type="number" placeholder="Total Cost" value={formState.totalCost} onChange={handleFormChange}/>
             <Select value={formState.status} onValueChange={v => handleSelectChange('status', v)}><SelectTrigger><SelectValue placeholder="Status"/></SelectTrigger><SelectContent><SelectItem value="Pending">Pending</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="Invoiced">Invoiced</SelectItem></SelectContent></Select>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button><Button onClick={handleSave}>Save</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button><Button onClick={handleSave}><Save className="h-4 w-4 mr-2" />Save</Button></DialogFooter>
         </DialogContent>
       </Dialog>
       
